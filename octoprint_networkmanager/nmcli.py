@@ -88,6 +88,40 @@ class Nmcli:
 
 		self._send_command(command)
 
+	def get_status(self):
+		"""
+		Return status of connections.
+		Returns:
+			connection:
+				wifi: True/False
+				ethernet: True/False
+			wifi:
+				#Cell object
+				ssid:  
+				signal:
+				type:
+		"""
+		result = []
+
+		status = {}
+		interfaces = self.get_interfaces()
+		wifis = self.scan_wifi()
+
+		for interface in interfaces:
+			status[interface] = self.is_device_active(interfaces[interface])
+
+
+		if status["wifi"]:
+			connections = self.get_active_connections()
+			for connection in connections:
+				if connection["device"] == interfaces["wifi"]:
+					name = connection["name"]
+			for wifi in wifis:
+				if wifi["ssid"] == name:
+					active = wifi
+
+		return dict(connection=status, active=active)
+
 	def get_configured_connections(self):
 		"""
 		Get all configured connections for wireless and wired configurations

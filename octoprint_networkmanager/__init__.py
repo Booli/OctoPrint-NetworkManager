@@ -83,9 +83,6 @@ class NetworkManagerPlugin(octoprint.plugin.SettingsPlugin,
 		if command == "scan_wifi":
 			return jsonify(self._get_wifi_list(force=True))
 
-		elif command == "get_configured_connections":
-			return jsonify(self._get_configured_connections())
-
 		# any commands processed after this check require admin permissions
 		if not admin_permission.can():
 			return make_response("Insufficient rights", 403)
@@ -106,7 +103,7 @@ class NetworkManagerPlugin(octoprint.plugin.SettingsPlugin,
 	##~~ Private functions to retrieve info
 
 	def _get_status(self):
-		self.nmcli.is_wifi_configured()
+		self.nmcli.get_status()
 
 	def _get_wifi_list(self, force=False):
 		content = self.nmcli.scan_wifi()
