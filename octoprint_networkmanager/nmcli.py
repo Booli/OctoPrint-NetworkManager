@@ -120,7 +120,7 @@ class Nmcli:
 				if wifi["ssid"] == name:
 					active = wifi
 
-		return dict(connection=status, active=active)
+		return dict(connection=status, wifi=active)
 
 	def get_configured_connections(self):
 		"""
