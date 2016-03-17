@@ -21,6 +21,8 @@ $(function() {
         self.connectionsId = undefined;
         self.connectId = undefined;
 
+        self.statusCurrentWifi = ko.observable();
+
         self.status = {
             connection: {
                 wifi: ko.observable(),
@@ -222,7 +224,7 @@ $(function() {
                 wifis.push({
                     ssid: wifi.ssid,
                     signal: wifi.signal,
-                    type: wifi.type,
+                    security: wifi.security,
                 });
             });
 
