@@ -136,11 +136,11 @@ $(function() {
             });
         };
 
-        self.onUserLoggedIn = function(user) {
-            if (user.admin) {
-                self.requestData();
-            }
-        };
+        // self.onUserLoggedIn = function(user) {
+        //     if (user.admin) {
+        //         self.requestData();
+        //     }
+        // };
 
         self.onStartUp = function(){
             self.connectionsId = $('#networkmanager_connections');
