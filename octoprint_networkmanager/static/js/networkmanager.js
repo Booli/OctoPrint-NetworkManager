@@ -167,6 +167,10 @@ $(function() {
             return "settings_plugin_networkmanager_wifi_" + md5(data.ssid);
         };
 
+        self.isActive = function(data) {
+            if (self.getEntryId(data.ssid) == self.statusCurrentWifi()) return "fa-check"
+        }
+
         self._postCommand = function (command, data, successCallback, failureCallback, alwaysCallback, timeout) {
             var payload = _.extend(data, {command: command});
 
