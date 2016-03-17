@@ -22,6 +22,8 @@ $(function() {
         self.connectId = undefined;
 
         self.statusCurrentWifi = ko.observable();
+        self.enableSignalSorting = ko.observable(false);
+
 
         self.status = {
             connection: {
