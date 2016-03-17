@@ -125,7 +125,7 @@ $(function() {
             }
 
             $.ajax({
-                url: API_BASEURL + "plugin/netconnectd",
+                url: API_BASEURL + "plugin/networkmanager",
                 type: "GET",
                 dataType: "json",
                 success: self.fromResponse
