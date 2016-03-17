@@ -168,7 +168,9 @@ $(function() {
         };
 
         self.isActive = function(data) {
-            if (self.getEntryId(data.ssid) == self.statusCurrentWifi()) return "fa-check"
+            if (self.getEntryId(data) == self.statusCurrentWifi()) {
+                return "fa-check"
+            }
         }
 
         self._postCommand = function (command, data, successCallback, failureCallback, alwaysCallback, timeout) {
