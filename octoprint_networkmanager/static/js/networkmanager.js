@@ -163,6 +163,10 @@ $(function() {
             self.pollingEnabled = false;
         };
 
+        self.getEntryId = function(data) {
+            return "settings_plugin_networkmanager_wifi_" + md5(data.ssid);
+        };
+
         self._postCommand = function (command, data, successCallback, failureCallback, alwaysCallback, timeout) {
             var payload = _.extend(data, {command: command});
 
