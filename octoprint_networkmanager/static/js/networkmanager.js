@@ -198,7 +198,7 @@ $(function() {
             self.status.connection.ethernet(response.status.connection.ethernet);
             self.status.wifi.ssid(response.status.wifi.ssid);
             self.status.wifi.signal(response.status.wifi.signal);
-            self.status.wifi.type(response.status.wifi.type);
+            self.status.wifi.security(response.status.wifi.security);
 
             self.statusCurrentWifi(undefined);
             if (response.status.wifi.ssid) {
