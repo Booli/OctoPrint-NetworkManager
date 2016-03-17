@@ -73,7 +73,7 @@ $(function() {
             self.requestData();
         };
 
-        self.toggleConnectEditor() {
+        self.toggleConnectEditor = function() {
             self.connectionsId.toggleClass('active');
             self.connectId.toggleClass('active');
 
