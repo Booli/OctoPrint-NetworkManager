@@ -106,7 +106,7 @@ class NetworkManagerPlugin(octoprint.plugin.SettingsPlugin,
 	##~~ Private functions to retrieve info
 
 	def _get_status(self):
-		self.nmcli.get_status()
+		return self.nmcli.get_status()
 
 	def _get_wifi_list(self, force=False):
 		content = self.nmcli.scan_wifi()
