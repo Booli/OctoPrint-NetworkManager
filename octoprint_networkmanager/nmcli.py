@@ -110,7 +110,7 @@ class Nmcli:
 		for interface in interfaces:
 			status[interface] = self.is_device_active(interfaces[interface])
 
-
+		active = {}
 		if status["wifi"]:
 			connections = self.get_active_connections()
 			for connection in connections:
