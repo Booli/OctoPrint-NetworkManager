@@ -67,12 +67,15 @@ class NetworkManagerPlugin(octoprint.plugin.SettingsPlugin,
 	def on_api_get(self, request):
 		try:
 			status = self._get_status()
+			self._logger.info(status)
 			if status:
 				wifis = self._get_wifi_list()  
 			else:
 				wifis = []
 		except Exception as e:
+			self._logger.warning(e.message)
 			return jsonify(dict(error=e.message))
+
 
 		return jsonify(dict(
 			wifis=wifis,
