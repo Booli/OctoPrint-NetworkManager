@@ -195,7 +195,7 @@ $(function() {
             }
 
             self.status.connection.wifi(response.status.connection.wifi);
-            self.status.connection.ehternet(response.status.connection.ethernet);
+            self.status.connection.ethernet(response.status.connection.ethernet);
             self.status.wifi.ssid(response.status.wifi.ssid);
             self.status.wifi.signal(response.status.wifi.signal);
             self.status.wifi.type(response.status.wifi.type);
