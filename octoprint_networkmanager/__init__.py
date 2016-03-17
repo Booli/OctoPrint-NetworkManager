@@ -57,9 +57,7 @@ class NetworkManagerPlugin(octoprint.plugin.SettingsPlugin,
 	def get_api_commands(self):
 		return dict(
 			scan_wifi=[],
-			get_configured_connections=[],
 			configure_wifi=["ssid"],
-			delete_configured_connection=["ssid"],
 			reset=[]
 		)
 
@@ -78,7 +76,6 @@ class NetworkManagerPlugin(octoprint.plugin.SettingsPlugin,
 
 		return jsonify(dict(
 			wifis=wifis,
-			configurations=configurations,
 			status=status
 		))
 
@@ -100,9 +97,6 @@ class NetworkManagerPlugin(octoprint.plugin.SettingsPlugin,
 				self._logger.info("Configuring wifi {ssid}...".format(**data))
 
 			self._configure_and_select_wifi(ssid=data["ssid"], psk=data["psk"])
-
-		elif command == "delete_configured_connection":
-			self._delete_configured_connection(data["ssid"])
 
 		elif command == "reset":
 			self._reset()
