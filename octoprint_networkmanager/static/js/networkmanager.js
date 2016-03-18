@@ -42,7 +42,7 @@ $(function() {
         self.editorWifiPassphrase1 = ko.observable();
         self.editorWifiPassphrase2 = ko.observable();
         self.editorWifiPassphraseMismatch = ko.computed(function() {
-            return self.editorWifiPassphrase1() != self.editorWifiPassphrase2();
+            return self.editorWifiPassphrase1() !== self.editorWifiPassphrase2();
         });
 
         self.working = ko.observable(false);
@@ -50,9 +50,9 @@ $(function() {
 
         self.ethernetConnectionText = ko.computed(function() {
             if(self.status.connection.ethernet()){
-                return "Connected"
+                return "Connected";
             }
-            return "Disconnected"
+            return "Disconnected";
         });
 
         // initialize list helper
@@ -106,12 +106,16 @@ $(function() {
 
         self.confirmWifiConfiguration = function() {
             self.sendWifiConfig(self.editorWifiSsid(), self.editorWifiPassphrase1(), function() {
-                self.editorWifi = undefined;
-                self.editorWifiSsid(undefined);
-                self.editorWifiPassphrase1(undefined);
-                self.editorWifiPassphrase2(undefined);
-                self.toggleConnectEditor();
+                self.cancelWifiConfiguration();
             });
+        };
+
+        self.cancelWifiConfiguration = function() {
+            self.editorWifi = undefined;
+            self.editorWifiSsid(undefined);
+            self.editorWifiPassphrase1(undefined);
+            self.editorWifiPassphrase2(undefined);
+            self.toggleConnectEditor();   
         };
 
         self.sendWifiConfig = function(ssid, psk, successCallback, failureCallback) {
@@ -130,7 +134,7 @@ $(function() {
         };
 
         self.requestData = function () {
-            if (self.pollingTimeoutId != undefined) {
+            if (self.pollingTimeoutId !== undefined) {
                 clearTimeout(self.pollingTimeoutId);
                 self.pollingTimeoutId = undefined;
             }
@@ -143,16 +147,11 @@ $(function() {
             });
         };
 
-        // self.onUserLoggedIn = function(user) {
-        //     if (user.admin) {
-        //         self.requestData();
-        //     }
-        // };
 
         self.onStartUp = function(){
             self.connectionsId = $('#networkmanager_connections');
             self.connectId = $('#networkmanager_connect');
-        }
+        };
 
         self.onBeforeBinding = function() {
             self.settings = self.settingsViewModel.settings;
@@ -164,7 +163,7 @@ $(function() {
         };
 
         self.onSettingsHidden = function() {
-            if (self.pollingTimeoutId != undefined) {
+            if (self.pollingTimeoutId !== undefined) {
                 self.pollingTimeoutId = undefined;
             }
             self.pollingEnabled = false;
@@ -175,16 +174,16 @@ $(function() {
         };
 
         self.isActive = function(data) {
-            if (self.getEntryId(data) == self.statusCurrentWifi()) {
-                return "fa-check"
+            if (self.getEntryId(data) === self.statusCurrentWifi()) {
+                return "fa-check";
             }
-        }
+        };
 
         self.isEncrypted = function(data) {
             if (data.security){
-                return "fa-lock"
+                return "fa-lock";
             }
-        }
+        };
 
         self._postCommand = function (command, data, successCallback, failureCallback, alwaysCallback, timeout) {
             var payload = _.extend(data, {command: command});
@@ -206,7 +205,7 @@ $(function() {
                 }
             };
 
-            if (timeout != undefined) {
+            if (timeout !== undefined) {
                 params.timeout = timeout;
             }
 
@@ -230,7 +229,7 @@ $(function() {
             self.statusCurrentWifi(undefined);
             if (response.status.wifi.ssid) {
                 _.each(response.wifis, function(wifi) {
-                    if (wifi.ssid == response.status.wifi.ssid) {
+                    if (wifi.ssid === response.status.wifi.ssid) {
                         self.statusCurrentWifi(self.getEntryId(wifi));
                     }
                 });
@@ -238,7 +237,7 @@ $(function() {
 
             var enableSignalSorting = false;
             _.each(response.wifis, function(wifi) {
-                if (wifi.signal != undefined) {
+                if (wifi.signal !== undefined) {
                     enableSignalSorting = true;
                 }
             });
@@ -261,7 +260,7 @@ $(function() {
             if (self.pollingEnabled) {
                 self.pollingTimeoutId = setTimeout(function() {
                     self.requestData();
-                }, 30000)
+                }, 30000);
             }
         };
 
