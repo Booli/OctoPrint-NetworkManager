@@ -148,12 +148,12 @@ $(function() {
         };
 
 
-        self.onStartUp = function(){
-            self.connectionsId = $('#networkmanager_connections');
-            self.connectId = $('#networkmanager_connect');
-        };
+        // self.onStartUp = function(){
+        // };
 
         self.onBeforeBinding = function() {
+            self.connectionsId = $('#networkmanager_connections');
+            self.connectId = $('#networkmanager_connect');
             self.settings = self.settingsViewModel.settings;
         };
 
