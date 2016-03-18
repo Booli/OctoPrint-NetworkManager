@@ -82,7 +82,7 @@ class NetworkManagerPlugin(octoprint.plugin.SettingsPlugin,
 			status=status
 		))
 
-	def on_api_commands(self, command, data):
+	def on_api_command(self, command, data):
 		self._logger.info("Command {command} with {data} ".format(command=command, data=data))
 		if command == "scan_wifi":
 			return jsonify(self._get_wifi_list(force=True))
