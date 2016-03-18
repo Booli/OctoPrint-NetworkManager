@@ -83,6 +83,7 @@ class NetworkManagerPlugin(octoprint.plugin.SettingsPlugin,
 		))
 
 	def on_api_commands(self, command, data):
+		self._logger.info("Command {command} with {data} ".format(command=command, data=data))
 		if command == "scan_wifi":
 			return jsonify(self._get_wifi_list(force=True))
 
@@ -114,7 +115,6 @@ class NetworkManagerPlugin(octoprint.plugin.SettingsPlugin,
 
 		for wifi in content:
 			result.append(dict(ssid=wifi["ssid"], signal=wifi["signal"], security=wifi["security"] if "security" in wifi else None))
-		self._logger.info(result)
 		return result
 
 	def _get_configured_connections(self):
@@ -129,9 +129,7 @@ class NetworkManagerPlugin(octoprint.plugin.SettingsPlugin,
 	def _delete_configured_connection(self, uuid):
 		self.nmcli.delete_configured_connection(uuid)
 
-	def _configure_and_select_wifi(self, ssid, **kwargs):
-		psk = kwargs.get("psk")
-
+	def _configure_and_select_wifi(self, ssid, psk):
 		self.nmcli.connect_wifi(ssid, psk)
 
 	def _reset(self):

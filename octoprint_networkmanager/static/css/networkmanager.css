@@ -1,15 +1,11 @@
 #networkmanager_connections,
-#networmanager_connect {
+#networkmanager_connect {
   display: none;
 }
 #networkmanager_connections.active,
-#networmanager_connect.active {
+#networkmanager_connect.active {
   display: -webkit-box;
   display: -webkit-flex;
   display: -ms-flexbox;
   display: flex;
-}
-#networkmanager_connections .Table-item,
-#networmanager_connect .Table-item {
-  min-height: 55px;
 }
