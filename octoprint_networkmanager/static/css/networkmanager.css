@@ -9,3 +9,7 @@
   display: -ms-flexbox;
   display: flex;
 }
+#networkmanager_connections .Table-item,
+#networmanager_connect .Table-item {
+  min-height: 55px;
+}
