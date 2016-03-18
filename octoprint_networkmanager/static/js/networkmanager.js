@@ -48,6 +48,13 @@ $(function() {
         self.working = ko.observable(false);
         self.error = ko.observable(false);
 
+        self.ethernetConnectionText = ko.computed(function() {
+            if(self.status.connection.ethernet()){
+                return "Connected"
+            }
+            return "Disconnected"
+        });
+
         // initialize list helper
         self.listHelper = new ItemListHelper(
             "wifis",
@@ -170,6 +177,12 @@ $(function() {
         self.isActive = function(data) {
             if (self.getEntryId(data) == self.statusCurrentWifi()) {
                 return "fa-check"
+            }
+        }
+
+        self.isEncrypted = function(data) {
+            if (data.security){
+                return "fa-lock"
             }
         }
 
