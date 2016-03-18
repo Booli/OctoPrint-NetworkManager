@@ -133,7 +133,7 @@ class Nmcli:
 		configured_connections = self._map_parse(parse, keys)
 
 		# Sanatize the connection name a bit
-		for connection in connections:
+		for connection in configured_connections:
 			if "wireless" in connection["type"]:
 				connection["type"] = "Wireless"
 			if "ethernet" in connection["type"]:
