@@ -133,7 +133,7 @@ $(function() {
         self.sendWifiDisconnect = function () {
             if (!self.loginState.isAdmin()) return;
 
-            self._postCommand("disconnect")
+            self._postCommand("disconnect_wifi")
         }
 
         self.sendReset = function() {
@@ -158,7 +158,7 @@ $(function() {
 
         self.sendWifiRefresh = function(force) {
             if (force === undefined) force = false;
-            self._postCommand("list_wifi", {force: force}, function(response) {
+            self._postCommand("scan_wifi", {force: force}, function(response) {
                 self.fromResponse({"wifis": response});
             });
         };
