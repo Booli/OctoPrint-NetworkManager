@@ -85,8 +85,9 @@ class NetworkManagerPlugin(octoprint.plugin.SettingsPlugin,
 	def on_api_command(self, command, data):
 		self._logger.info("Command {command} with {data} ".format(command=command, data=data))
 		if command == "scan_wifi":
-			return jsonify(self._get_wifi_list(force=True))
+			wifis = self._get_wifi_list(force=True)
 			self._logger.info("Wifi scan initiated")
+			return jsonify(dict(wifis=wifis))
 
 		# any commands processed after this check require admin permissions
 		if not admin_permission.can():
@@ -100,7 +101,7 @@ class NetworkManagerPlugin(octoprint.plugin.SettingsPlugin,
 
 			self._configure_and_select_wifi(ssid=data["ssid"], psk=data["psk"])
 
-		elif command =="disconnect_wifi":
+		elif command == "disconnect_wifi":
 			self._disconnect_wifi()
 
 		elif command == "reset":
@@ -131,13 +132,13 @@ class NetworkManagerPlugin(octoprint.plugin.SettingsPlugin,
 		return result
 
 	def _disconnect_wifi(self):
-		self.nmcli.disconnect_interface('wifi')
+		return self.nmcli.disconnect_interface('wifi')
 
 	def _delete_configured_connection(self, uuid):
-		self.nmcli.delete_configured_connection(uuid)
+		return self.nmcli.delete_configured_connection(uuid)
 
 	def _configure_and_select_wifi(self, ssid, psk):
-		self.nmcli.connect_wifi(ssid, psk)
+		return self.nmcli.connect_wifi(ssid, psk)
 
 	def _reset(self):
 		self.nmcli.reset_wifi()
