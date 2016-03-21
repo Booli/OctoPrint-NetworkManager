@@ -58,6 +58,7 @@ class NetworkManagerPlugin(octoprint.plugin.SettingsPlugin,
 		return dict(
 			scan_wifi=[],
 			configure_wifi=["ssid"],
+			disconnect_wifi=[],
 			reset=[]
 		)
 
@@ -67,7 +68,6 @@ class NetworkManagerPlugin(octoprint.plugin.SettingsPlugin,
 	def on_api_get(self, request):
 		try:
 			status = self._get_status()
-			self._logger.info(status)
 			if status:
 				wifis = self._get_wifi_list()  
 			else:
@@ -86,6 +86,7 @@ class NetworkManagerPlugin(octoprint.plugin.SettingsPlugin,
 		self._logger.info("Command {command} with {data} ".format(command=command, data=data))
 		if command == "scan_wifi":
 			return jsonify(self._get_wifi_list(force=True))
+			self._logger.info("Wifi scan initiated")
 
 		# any commands processed after this check require admin permissions
 		if not admin_permission.can():
@@ -99,6 +100,9 @@ class NetworkManagerPlugin(octoprint.plugin.SettingsPlugin,
 
 			self._configure_and_select_wifi(ssid=data["ssid"], psk=data["psk"])
 
+		elif command =="disconnect_wifi":
+			self._disconnect_wifi()
+
 		elif command == "reset":
 			self._reset()
 
@@ -110,7 +114,7 @@ class NetworkManagerPlugin(octoprint.plugin.SettingsPlugin,
 		return self.nmcli.get_status()
 
 	def _get_wifi_list(self, force=False):
-		content = self.nmcli.scan_wifi()
+		content = self.nmcli.scan_wifi(force=force)
 		result = []
 
 		for wifi in content:
@@ -125,6 +129,9 @@ class NetworkManagerPlugin(octoprint.plugin.SettingsPlugin,
 			result.append(dict(name=connection["name"], type=connection["type"], uuid=connection["uuid"]))
 		self._logger.info(result)
 		return result
+
+	def _disconnect_wifi(self):
+		self.nmcli.disconnect_interface('wifi')
 
 	def _delete_configured_connection(self, uuid):
 		self.nmcli.delete_configured_connection(uuid)
