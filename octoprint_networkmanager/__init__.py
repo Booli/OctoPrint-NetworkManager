@@ -99,10 +99,10 @@ class NetworkManagerPlugin(octoprint.plugin.SettingsPlugin,
 			else:
 				self._logger.info("Configuring wifi {ssid}...".format(**data))
 
-			self._configure_and_select_wifi(ssid=data["ssid"], psk=data["psk"])
+			return self._configure_and_select_wifi(ssid=data["ssid"], psk=data["psk"])
 
 		elif command == "disconnect_wifi":
-			self._disconnect_wifi()
+			return self._disconnect_wifi()
 
 		elif command == "reset":
 			self._reset()
@@ -132,13 +132,21 @@ class NetworkManagerPlugin(octoprint.plugin.SettingsPlugin,
 		return result
 
 	def _disconnect_wifi(self):
-		return self.nmcli.disconnect_interface('wifi')
+		returncode, output = self.nmcli.disconnect_interface('wifi')
+		if (returncode != 0):
+			return make_response("An error occured while disconnecting: {output}".format(output=output), 400)
+		return make_response("Succesful disconnect: {output}".format(output=output), 200)
+
 
 	def _delete_configured_connection(self, uuid):
 		return self.nmcli.delete_configured_connection(uuid)
 
 	def _configure_and_select_wifi(self, ssid, psk):
-		return self.nmcli.connect_wifi(ssid, psk)
+		returncode, output = self.nmcli.connect_wifi(ssid, psk)
+		if (returncode != 0):
+			return make_response("An error occured with text{output}".format(output=output), 400)
+		return make_response("Succesful connection: {output}".format(output=output), 200)
+
 
 	def _reset(self):
 		self.nmcli.reset_wifi()
