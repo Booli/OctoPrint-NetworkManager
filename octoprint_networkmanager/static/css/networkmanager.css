@@ -1,1 +1,11 @@
-/* TODO: Have your plugin's CSS files generated to here. */
+#networkmanager_connections,
+#networkmanager_connect {
+  display: none;
+}
+#networkmanager_connections.active,
+#networkmanager_connect.active {
+  display: -webkit-box;
+  display: -webkit-flex;
+  display: -ms-flexbox;
+  display: flex;
+}

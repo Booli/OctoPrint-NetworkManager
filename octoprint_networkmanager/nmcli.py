@@ -86,7 +86,43 @@ class Nmcli:
 		"""
 		command = ["dev", "wifi", "rescan"]
 
-		self._send_command(command)
+		print("Rescan")
+
+		return self._send_command(command)
+
+	def get_status(self):
+		"""
+		Return status of connections.
+		Returns:
+			connection:
+				wifi: True/False
+				ethernet: True/False
+			wifi:
+				#Cell object
+				ssid:  
+				signal:
+				type:
+		"""
+		result = []
+
+		status = {}
+		interfaces = self.get_interfaces()
+		wifis = self.scan_wifi()
+
+		for interface in interfaces:
+			status[interface] = self.is_device_active(interfaces[interface])
+
+		active = {}
+		if status["wifi"]:
+			connections = self.get_active_connections()
+			for connection in connections:
+				if connection["device"] == interfaces["wifi"]:
+					name = connection["name"]
+			for wifi in wifis:
+				if wifi["ssid"] == name:
+					active = wifi
+
+		return dict(connection=status, wifi=active)
 
 	def get_configured_connections(self):
 		"""
@@ -99,7 +135,7 @@ class Nmcli:
 		configured_connections = self._map_parse(parse, keys)
 
 		# Sanatize the connection name a bit
-		for connection in connections:
+		for connection in configured_connections:
 			if "wireless" in connection["type"]:
 				connection["type"] = "Wireless"
 			if "ethernet" in connection["type"]:
@@ -131,8 +167,17 @@ class Nmcli:
 				self.delete_configured_connection(connection["uuid"])
 
 
+	def disconnect_interface(self, interface):
+		"""
+		Disconnect either 'wifi' or 'ethernet'. Uses disconnect_device and is_device_active to disconnect an interface.__init__.py
+		"""
+		interfaces = self.get_interfaces()
 
-	def disconnect_device(self, device):
+		device = interfaces[interface]
+
+		return self._disconnect_device(device)
+
+	def _disconnect_device(self, device):
 		""" 
 		Disconnect wifi selected. This uses 'nmcli dev disconnect interface' since thats is the recommended method. 
 		Using 'nmcli con down SSID' will bring the connection down but will not make it auto connect on the interface any more.
