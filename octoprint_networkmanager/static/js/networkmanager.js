@@ -30,6 +30,10 @@ $(function() {
                 wifi: ko.observable(),
                 ethernet: ko.observable()
             },
+            ip: {
+                wifi: ko.observable(),
+                ethernet: ko.observable()
+            },
             wifi: {
                 ssid: ko.observable(),
                 signal: ko.observable(),
@@ -249,6 +253,8 @@ $(function() {
 
             self.status.connection.wifi(response.status.connection.wifi);
             self.status.connection.ethernet(response.status.connection.ethernet);
+            self.status.ip.wifi(response.status.ip.wifi);
+            self.status.ip.ethernet(response.status.ip.ethernet);
             self.status.wifi.ssid(response.status.wifi.ssid);
             self.status.wifi.signal(response.status.wifi.signal);
             self.status.wifi.security(response.status.wifi.security);
