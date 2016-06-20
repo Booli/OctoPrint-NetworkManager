@@ -294,7 +294,9 @@ class Nmcli:
 		parse = self._sanatize_parse(self._send_command(command))
 
 		for elem in parse[0]:
-			ip = self.ip_regex.match(elem).group()
+			match = self.ip_regex.match(elem)
+			if match:
+				ip = match.group()
 
 		return ip
 
