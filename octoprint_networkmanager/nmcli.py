@@ -216,9 +216,7 @@ class Nmcli:
 		for elem in devices:
 			if device in elem:
 				if elem[1] == "connected":
-					pprint.pprint("Device is connected, return True")
 					return True
-				pprint.pprint("Device seems to not be connected return False")
 				return False
 
 		# We didnt find any device matching, return False also
