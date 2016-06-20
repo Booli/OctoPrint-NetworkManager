@@ -41,6 +41,24 @@ $(function() {
             }
         };
 
+        self.ethernetIp = ko.computed(function(){
+            if (!self.status.ip.ethernet()) {
+                return ""
+            }
+            else {
+                return self.status.ip.ethernet();
+            }
+        });
+
+        self.wifiIp = ko.computed(function(){
+            if (!self.status.ip.wifi()) {
+                return ""
+            }
+            else {
+                return self.status.ip.wifi();
+            }
+        });
+
         self.editorWifi = undefined;
         self.editorWifiSsid = ko.observable();
         self.editorWifiPassphrase1 = ko.observable();
