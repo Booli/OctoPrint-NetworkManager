@@ -296,7 +296,7 @@ class Nmcli:
 
 		ip = None
 		for elem in parse[0]:
-			match = self.ip_regex.match(elem)
+			match = self.ip_regex.search(elem)
 			if match:
 				ip = match.group()
 
