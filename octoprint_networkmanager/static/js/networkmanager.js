@@ -135,15 +135,15 @@ $(function() {
             successCallback == successCallback || function() {
                 $.notify({
                     title: "Disconnected succes",
-                    text: "You have successfully disconnected the wifi connection",
+                    text: "You have successfully disconnected the wifi connection"},
                     "success"
-                });
+                );
             };
 
             self._postCommand("disconnect_wifi", {}, successCallback, failureCallback, function() {
                 self.requestData();   
             });
-        }
+        };
 
         self.sendReset = function() {
             if (!self.loginState.isAdmin()) return;
