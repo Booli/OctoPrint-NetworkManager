@@ -25,7 +25,8 @@ class Nmcli:
 			self.logger.error("Nmcli incorrect version: {version}. Must be higher than 0.9.9.0".format(version=err.args[0]))
 			raise Exception
 
-
+		self.ip_regex = re.compile('(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)')
+ 
 	def _send_command(self, command):
 		"""
 		Sends command to ncmli with subprocess. 
@@ -106,11 +107,13 @@ class Nmcli:
 		result = []
 
 		status = {}
+		ips = {}
 		interfaces = self.get_interfaces()
 		wifis = self.scan_wifi()
 
 		for interface in interfaces:
 			status[interface] = self.is_device_active(interfaces[interface])
+			ips[interface] = self._get_interface_ip(interfaces[interface])
 
 		active = {}
 		if status["wifi"]:
@@ -122,7 +125,7 @@ class Nmcli:
 				if wifi["ssid"] == name:
 					active = wifi
 
-		return dict(connection=status, wifi=active)
+		return dict(connection=status, wifi=active, ip=ips)
 
 	def get_configured_connections(self):
 		"""
@@ -281,6 +284,19 @@ class Nmcli:
 		interfaces = dict((x[0], x[1]) for x in parse)
 
 		return interfaces
+
+	def _get_interface_ip(self, device):
+		"""
+		Get the ip of the connection
+		"""
+
+		command = ["-t", "-f", "IP4.ADDRESS", "d", "show", device] 
+		parse = self._sanatize_parse(self._send_command(command))
+
+		for elem in parse[0]:
+			ip = ip_regex.match(elem).group()
+
+		return ip
 
 	def _map_parse(self, parse, keys):
 		cells = []
