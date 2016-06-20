@@ -294,7 +294,7 @@ class Nmcli:
 		command = ["-t", "-f", "IP4.ADDRESS", "d", "show", device] 
 		parse = self._sanatize_parse(self._send_command(command))
 
-		ip = []
+		ip = None
 		for elem in parse[0]:
 			match = self.ip_regex.match(elem)
 			if match:
