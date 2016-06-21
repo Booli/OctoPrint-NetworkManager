@@ -190,10 +190,21 @@ $(function() {
         self.sendWifiRefresh = function(force) {
             if (force === undefined) force = false;
             self.working(true);
-            self._postCommand("scan_wifi", {force: force}, function(response) {
-                self.fromResponse(response);
-                self.working(false);
-            }, function(){self.working(false)});
+            self._postCommand("scan_wifi", {force: force}, 
+                // Success callback
+                function(response) { 
+                    self.fromResponse(response);
+                    self.working(false);
+                }, 
+                // Error callback
+                function(){
+                    self.working(false);
+                    $.notify({
+                        title: "Refresh error!",
+                        text: "Can't refresh more than once every minute."},
+                        "warning"
+                    );
+                });
         };
 
 
