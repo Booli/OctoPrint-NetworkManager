@@ -189,10 +189,10 @@ $(function() {
 
         self.sendWifiRefresh = function(force) {
             if (force === undefined) force = false;
-            self.working = true;
+            self.working(true);
             self._postCommand("scan_wifi", {force: force}, function(response) {
                 self.fromResponse({"wifis": response});
-                self.working = false;
+                self.working(false);
             });
         };
 
