@@ -190,7 +190,7 @@ class Nmcli:
 		if self.is_device_active(device):
 				command = ["dev", "disconnect", device]
 				return self._send_command(command)
-		return False
+		return (1, "Device not active") 
 
 	def is_wifi_configured(self):
 		"""
