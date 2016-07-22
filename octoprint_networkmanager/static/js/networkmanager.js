@@ -99,7 +99,7 @@ $(function() {
             "signal",
             [],
             [],
-            10
+            5
         );
 
         self.refresh = function() {

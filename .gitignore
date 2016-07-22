@@ -8,3 +8,10 @@ dist
 .DS_Store
 *.zip
 *.codekit
+/octoprint_networkmanager/.vs/config/applicationhost.config
+/octoprint_networkmanager/.vs/octoprint_networkmanager/v14/.suo
+/octoprint_networkmanager/compilerconfig.json
+/octoprint_networkmanager/octoprint_networkmanager.sln
+/octoprint_networkmanager/octoprint_networkmanager.pyproj.user
+/octoprint_networkmanager/octoprint_networkmanager.pyproj
+/octoprint_networkmanager/static/css/networkmanager.min.css
