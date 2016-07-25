@@ -123,7 +123,7 @@ class NetworkManagerPlugin(octoprint.plugin.SettingsPlugin,
 
         if sys.platform == "win32" or sys.platform == "darwin":
             for i in range(0,20):
-                result.append(dict(ssid="Leapfrog%d" % (i+1), signal=i*5, security=True))
+                result.append(dict(ssid="Leapfrog%d" % (i+1), signal=(20-i)*5, security=(i%2==0)))
         else:
             content = self.nmcli.scan_wifi(force=force)
             
