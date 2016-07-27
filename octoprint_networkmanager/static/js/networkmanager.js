@@ -13,7 +13,6 @@ $(function() {
         var self = this;
 
         self.loginState = parameters[0];
-        self.settingsViewModel = parameters[1];
 
         self.pollingEnabled = false;
         self.pollingTimeoutId = undefined;
@@ -99,16 +98,28 @@ $(function() {
             "signal",
             [],
             [],
-            10
+            5
         );
+
+        self.getSignalClasses = function(data)
+        {
+            n = Math.ceil(data.signal / 20);
+            return "fa fa-signal fa-signal-" + n;
+        }
 
         self.refresh = function() {
             self.requestData();
         };
 
-        self.toggleConnectEditor = function() {
-            self.connectionsId.toggleClass('active');
-            self.connectId.toggleClass('active');
+        self.showConnectEditor = function() {
+            self.connectionsId.removeClass('active');
+            self.connectId.addClass('active');
+
+        };
+
+        self.hideConnectEditor = function () {
+            self.connectionsId.addClass('active');
+            self.connectId.removeClass('active');
 
         };
 
@@ -120,7 +131,7 @@ $(function() {
             self.editorWifiPassphrase1(undefined);
             self.editorWifiPassphrase2(undefined);
             if (data.security) {
-                self.toggleConnectEditor();
+                self.showConnectEditor();
             } else {
                 self.confirmWifiConfiguration();
             }
@@ -129,6 +140,13 @@ $(function() {
         self.confirmWifiConfiguration = function() {
             self.sendWifiConfig(self.editorWifiSsid(), self.editorWifiPassphrase1(), function() {
                 self.cancelWifiConfiguration();
+            }, function () {
+                $.notify({
+                    title: "Connection failed",
+                    text: "The printer was unable to connect to the wifi network \"" + self.editorWifiSsid() + "\". " + (self.editorWifiPassphrase1() ? ' Please check if you entered the correct password.' : '')
+                },
+                   "error"
+               );
             });
         };
 
@@ -137,7 +155,7 @@ $(function() {
             self.editorWifiSsid(undefined);
             self.editorWifiPassphrase1(undefined);
             self.editorWifiPassphrase2(undefined);
-            self.toggleConnectEditor();   
+            self.hideConnectEditor();
         };
 
         self.sendWifiConfig = function(ssid, psk, successCallback, failureCallback) {
@@ -146,7 +164,6 @@ $(function() {
             self.working(true);
             self._postCommand("configure_wifi", {ssid: ssid, psk: psk}, successCallback, failureCallback, function() {
                 self.working(false);
-                self.toggleConnectEditor();   
             }, 5000); // LEFT HERE: FIX IF NEEDED
 
 
@@ -161,9 +178,10 @@ $(function() {
                     "success"
                 );
             };
-
+            self.working(true);
             self._postCommand("disconnect_wifi", {}, successCallback, failureCallback, function() {
-                self.requestData();   
+                self.requestData();
+                self.working(false);
             });
         };
 
@@ -214,7 +232,6 @@ $(function() {
         self.onBeforeBinding = function() {
             self.connectionsId = $('#networkmanager_connections');
             self.connectId = $('#networkmanager_connect');
-            self.settings = self.settingsViewModel.settings;
         };
 
         self.onSettingsShown = function() {
@@ -337,9 +354,9 @@ $(function() {
     OCTOPRINT_VIEWMODELS.push([
         NetworkmanagerViewModel,
 
-        [ "loginStateViewModel", "settingsViewModel"],
+        [ "loginStateViewModel"],
 
         // e.g. #settings_plugin_networkmanager, #tab_plugin_networkmanager, ...
-        [ "#settings_plugin_networkmanager"]
+        ["#settings_plugin_networkmanager", "#ethernet_connectivity", "#wifi_connectivity"]
     ]);
 });
