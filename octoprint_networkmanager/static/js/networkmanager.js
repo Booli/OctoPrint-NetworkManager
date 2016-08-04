@@ -225,6 +225,10 @@ $(function() {
             self.settings = self.settingsViewModel.settings;
         };
 
+        self.onAfterBinding = function () {
+            self.requestData();
+        };
+
         self.onSettingsShown = function() {
             self.pollingEnabled = true;
             self.requestData();
