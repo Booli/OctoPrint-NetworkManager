@@ -13,7 +13,6 @@ $(function() {
         var self = this;
 
         self.loginState = parameters[0];
-        self.settingsViewModel = parameters[1];
 
         self.pollingEnabled = false;
         self.pollingTimeoutId = undefined;
@@ -222,7 +221,6 @@ $(function() {
         self.onBeforeBinding = function() {
             self.connectionsId = $('#networkmanager_connections');
             self.connectId = $('#networkmanager_connect');
-            self.settings = self.settingsViewModel.settings;
         };
 
         self.onAfterBinding = function () {
@@ -344,7 +342,7 @@ $(function() {
     OCTOPRINT_VIEWMODELS.push([
         NetworkmanagerViewModel,
 
-        [ "loginStateViewModel", "settingsViewModel"],
+        [ "loginStateViewModel"],
 
         // e.g. #settings_plugin_networkmanager, #tab_plugin_networkmanager, ...
         ["#settings_plugin_networkmanager", "#ethernet_connectivity", "#wifi_connectivity"]

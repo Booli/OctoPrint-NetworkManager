@@ -95,10 +95,11 @@ class NetworkManagerPlugin(octoprint.plugin.SettingsPlugin,
             return make_response("Insufficient rights", 403)
 
         if command == "configure_wifi":
-            if data["psk"]:
+            if "psk" in data:
                 self._logger.info("Configuring wifi {ssid} and psk...".format(**data))
             else:
                 self._logger.info("Configuring wifi {ssid}...".format(**data))
+                data['psk'] = None
 
             return self._configure_and_select_wifi(ssid=data["ssid"], psk=data["psk"])
 
