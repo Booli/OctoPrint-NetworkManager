@@ -261,7 +261,7 @@ $(function() {
             var params = {
                 url: API_BASEURL + "plugin/networkmanager",
                 type: "POST",
-                dataType: "json",
+                //dataType: "json", Let jquery do an intelligent guess
                 data: JSON.stringify(payload),
                 contentType: "application/json; charset=UTF-8",
                 success: function(response) {
