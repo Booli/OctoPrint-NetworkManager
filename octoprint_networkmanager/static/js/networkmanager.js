@@ -164,7 +164,7 @@ $(function() {
             self.working(true);
             self._postCommand("configure_wifi", {ssid: ssid, psk: psk}, successCallback, failureCallback, function() {
                 self.working(false);
-            }, 5000); // LEFT HERE: FIX IF NEEDED
+            }, 15000); // LEFT HERE: FIX IF NEEDED
 
 
         };
@@ -232,6 +232,10 @@ $(function() {
         self.onBeforeBinding = function() {
             self.connectionsId = $('#networkmanager_connections');
             self.connectId = $('#networkmanager_connect');
+        };
+
+        self.onAfterBinding = function () {
+            self.requestData();
         };
 
         self.onSettingsShown = function() {
