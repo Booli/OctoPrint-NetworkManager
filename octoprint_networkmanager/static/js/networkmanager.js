@@ -267,8 +267,9 @@ $(function() {
                 success: function(response) {
                     if (successCallback) successCallback(response);
                 },
-                error: function() {
+                error: function (xhr, status, err) {
                     if (failureCallback) failureCallback();
+                    console.log(status, err);
                 },
                 complete: function() {
                     if (alwaysCallback) alwaysCallback();
