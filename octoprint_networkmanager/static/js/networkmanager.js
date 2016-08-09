@@ -234,8 +234,10 @@ $(function() {
             self.connectId = $('#networkmanager_connect');
         };
 
-        self.onStartupComplete = function () {
-            self.requestData();
+        self.onUserLoggedIn = function (user) {
+            if (user.admin) {
+                self.requestData();
+            }
         };
 
         self.onSettingsShown = function() {
