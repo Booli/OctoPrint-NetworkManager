@@ -234,7 +234,7 @@ $(function() {
             self.connectId = $('#networkmanager_connect');
         };
 
-        self.onAfterBinding = function () {
+        self.onStartupComplete = function () {
             self.requestData();
         };
 
