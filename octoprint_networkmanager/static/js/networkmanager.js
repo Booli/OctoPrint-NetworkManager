@@ -207,11 +207,22 @@ $(function() {
 
         self.sendWifiRefresh = function(force) {
             if (force === undefined) force = false;
-            self.working = true;
-            self._postCommand("scan_wifi", {force: force}, function(response) {
-                self.fromResponse({"wifis": response});
-                self.working = false;
-            });
+            self.working(true);
+            self._postCommand("scan_wifi", {force: force}, 
+                // Success callback
+                function(response) { 
+                    self.fromResponse(response);
+                    self.working(false);
+                }, 
+                // Error callback
+                function(){
+                    self.working(false);
+                    $.notify({
+                        title: "Refresh error!",
+                        text: "Can't refresh more than once every minute."},
+                        "warning"
+                    );
+                });
         };
 
 
@@ -223,8 +234,10 @@ $(function() {
             self.connectId = $('#networkmanager_connect');
         };
 
-        self.onAfterBinding = function () {
-            self.requestData();
+        self.onUserLoggedIn = function (user) {
+            if (user.admin) {
+                self.requestData();
+            }
         };
 
         self.onSettingsShown = function() {
@@ -291,43 +304,48 @@ $(function() {
                 self.error(false);
             }
 
-            self.status.connection.wifi(response.status.connection.wifi);
-            self.status.connection.ethernet(response.status.connection.ethernet);
-            self.status.ip.wifi(response.status.ip.wifi);
-            self.status.ip.ethernet(response.status.ip.ethernet);
-            self.status.wifi.ssid(response.status.wifi.ssid);
-            self.status.wifi.signal(response.status.wifi.signal);
-            self.status.wifi.security(response.status.wifi.security);
 
-            self.statusCurrentWifi(undefined);
-            if (response.status.wifi.ssid) {
-                _.each(response.wifis, function(wifi) {
-                    if (wifi.ssid === response.status.wifi.ssid) {
-                        self.statusCurrentWifi(self.getEntryId(wifi));
-                    }
-                });
+            if (response.status) {
+                self.status.connection.wifi(response.status.connection.wifi);
+                self.status.connection.ethernet(response.status.connection.ethernet);
+                self.status.ip.wifi(response.status.ip.wifi);
+                self.status.ip.ethernet(response.status.ip.ethernet);
+                self.status.wifi.ssid(response.status.wifi.ssid);
+                self.status.wifi.signal(response.status.wifi.signal);
+                self.status.wifi.security(response.status.wifi.security);
+
+                self.statusCurrentWifi(undefined);
+                if (response.status.wifi.ssid) {
+                    _.each(response.wifis, function(wifi) {
+                        if (wifi.ssid === response.status.wifi.ssid) {
+                            self.statusCurrentWifi(self.getEntryId(wifi));
+                        }
+                    });
+                }
             }
 
-            var enableSignalSorting = false;
-            _.each(response.wifis, function(wifi) {
-                if (wifi.signal !== undefined) {
-                    enableSignalSorting = true;
-                }
-            });
-            self.enableSignalSorting(enableSignalSorting);
-
-            var wifis = [];
-            _.each(response.wifis, function(wifi) {
-                wifis.push({
-                    ssid: wifi.ssid,
-                    signal: wifi.signal,
-                    security: wifi.security,
+            if (response.wifis) {
+                var enableSignalSorting = false;
+                _.each(response.wifis, function(wifi) {
+                    if (wifi.signal !== undefined) {
+                        enableSignalSorting = true;
+                    }
                 });
-            });
+                self.enableSignalSorting(enableSignalSorting);
 
-            self.listHelper.updateItems(wifis);
-            if (!enableSignalSorting) {
-                self.listHelper.changeSorting("ssid");
+                var wifis = [];
+                _.each(response.wifis, function(wifi) {
+                    wifis.push({
+                        ssid: wifi.ssid,
+                        signal: wifi.signal,
+                        security: wifi.security,
+                    });
+                });
+
+                self.listHelper.updateItems(wifis);
+                if (!enableSignalSorting) {
+                    self.listHelper.changeSorting("ssid");
+                }
             }
 
             if (self.pollingEnabled) {
