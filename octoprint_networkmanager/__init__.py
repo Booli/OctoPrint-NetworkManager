@@ -64,7 +64,7 @@ class NetworkManagerPlugin(octoprint.plugin.SettingsPlugin,
         )
 
     def is_api_adminonly(self):
-        return True
+        return False
 
     def on_api_get(self, request):
         try:
