@@ -310,13 +310,14 @@ class Nmcli:
     def _sanatize_parse(self, output):
         """
         Sanatizes the parse. using the -t command of nmli, ':' is used to split
+        Use rsplit with a max of 2 splits to make sure SSIDs with ':' are parsed correctly. 
         """
         #Check if command executed correctly[returncode 0], otherwise return nothing
         if not output[0]:
             parse = output[1].splitlines()
             parse_split = []
             for line in parse:
-                line = line.split(":")
+                line = line.rsplit(":", 2)
                 parse_split.append(line)
             return parse_split
     
