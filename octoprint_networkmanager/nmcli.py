@@ -161,6 +161,17 @@ class Nmcli:
             pprint.pprint("Connection with uuid: {uuid} deleted".format(uuid=uuid))
             return True
 
+    def get_configured_connection_details(self, uuid):
+        command = ["-t", "con", "show", uuid ]
+        result = self._sanatize_parse_key_value(self._send_command(command))
+        return result
+
+    def set_configured_connection_details(self, uuid, new_settings):
+        command = ["-t", "con", "modify", uuid ]
+
+        for setting, value in new_settings.iteritems():
+            command.append(setting, value)
+
     def clear_configured_connection(self, ssid):
         """
         Delete all wifi configurations with ssid in name. Might be needed after multiple of the same connetions are created
@@ -190,7 +201,7 @@ class Nmcli:
         if self.is_device_active(device):
                 command = ["dev", "disconnect", device]
                 return self._send_command(command)
-		return (1, "Device not active") 
+        return (1, "Device not active") 
 
     def is_wifi_configured(self):
         """
@@ -320,6 +331,19 @@ class Nmcli:
                 parse_split.append(line)
             return parse_split
     
+    def _sanatize_parse_key_value(self, output):
+        """
+        Sanatizes the parse. using the -t command of nmli, ':' is used to split. Returns key-value pairs
+        """
+        #Check if command executed correctly[returncode 0], otherwise return nothing
+        if not output[0]:
+            parse = output[1].splitlines()
+            parse_split = {}
+            for line in parse:
+                line = line.split(":")
+                if len(line) == 2:
+                    parse_split[line[0]] = line[1]
+            return parse_split
 
     def _filter_cells(self, cells):
         """

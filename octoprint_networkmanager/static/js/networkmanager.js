@@ -23,6 +23,8 @@ $(function() {
         self.statusCurrentWifi = ko.observable();
         self.enableSignalSorting = ko.observable(false);
 
+        self.connectionDetails = ko.observable();
+        self.connectionDetailsEditorVisible = ko.observable(false);
 
         self.status = {
             connection: {
@@ -122,6 +124,19 @@ $(function() {
             self.connectId.removeClass('active');
 
         };
+
+        self.editConnectionDetails = function()
+        {
+            if (!self.loginState.isAdmin()) return; // Maybe do something with this return 
+
+            $.ajax({
+                url: API_BASEURL + "plugin/networkmanager/connection_details",
+                type: "GET",
+                dataType: "json"
+            }).done(function () {
+                ko.mapping.fromJS(response.details, {}, self.connectionDetails);
+            });
+        }
 
         self.configureWifi = function(data) {
             if (!self.loginState.isAdmin()) return; // Maybe do something with this return 
@@ -226,9 +241,6 @@ $(function() {
         };
 
 
-        // self.onStartUp = function(){
-        // };
-
         self.onBeforeBinding = function() {
             self.connectionsId = $('#networkmanager_connections');
             self.connectId = $('#networkmanager_connect');
@@ -269,13 +281,12 @@ $(function() {
         };
 
         self._postCommand = function (command, data, successCallback, failureCallback, alwaysCallback, timeout) {
-            var payload = _.extend(data, {command: command});
 
             var params = {
-                url: API_BASEURL + "plugin/networkmanager",
+                url: API_BASEURL + "plugin/networkmanager/" + command,
                 type: "POST",
-                //dataType: "json", Let jquery do an intelligent guess
-                data: JSON.stringify(payload),
+                dataType: "json",
+                data: data,
                 contentType: "application/json; charset=UTF-8",
                 success: function(response) {
                     if (successCallback) successCallback(response);
