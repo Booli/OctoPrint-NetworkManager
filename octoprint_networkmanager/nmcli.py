@@ -3,7 +3,6 @@ import subprocess
 import logging
 import sys
 import os
-import pprint #REMOVE IN CLEAN
 import re
 
 from time import sleep
@@ -11,13 +10,12 @@ from pipes import quote #CHECK if used
 
 class Nmcli:
 
-    def __init__(self):
+    def __init__(self, mocking = False):
 
         logging.basicConfig(level=logging.INFO)
-        self.logger = logging.getLogger(__name__)
-        def exception_logger(exc_type, exc_value, exc_tb):
-            self.logger.error("Uncaught exception", exc_info=(exc_type, exc_value, exc_tb))
-        sys.excepthook = exception_logger
+        self.logger = logging.getLogger("octoprint.plugins.networkmanager.nmcli")
+
+        self.mocking = mocking
 
         try: 
             self.check_nmcli_version()
@@ -32,6 +30,11 @@ class Nmcli:
         Sends command to ncmli with subprocess. 
         Returns (0, output) of the command if succeeded, returns the exit code and output when errors
         """
+
+        self._log_command(command)
+
+        if self.mocking:
+            return 1, None
 
         command[:0] = ["nmcli"]
         try:
@@ -70,6 +73,12 @@ class Nmcli:
         # Parse command
         parse = self._sanatize_parse(self._send_command(command))
 
+        if self.mocking:
+            result = []
+            for i in range(0,20):
+                result.append(dict(ssid="Leapfrog%d" % (i+1), signal=(20-i)*5, security=(i%2==0)))
+            return result
+
         # Map output to dict with keys[]
         cells = self._map_parse(parse, keys)
 
@@ -87,46 +96,53 @@ class Nmcli:
         """
         command = ["dev", "wifi", "rescan"]
 
-        print("Rescan")
-
         return self._send_command(command)
 
     def get_status(self):
         """
         Return status of connections.
         Returns:
-            connection:
-                wifi: True/False
-                ethernet: True/False
+            ethernet:
+                connection_uuid: string
+                connected: bool
+                ip: string
             wifi:
-                #Cell object
-                ssid:  
-                signal:
-                type:
+                connection_uuid: string
+                connected: bool
+                ip: string
+                ssid: string
         """
-        result = []
+        if self.mocking:
+            return { 
+                "ethernet" : { 
+                    "connection_uuid" : "1234", 
+                    "connected" : True, 
+                    "ip" : "127.0.0.1" },
+                "wifi" : {
+                    "connection_uuid" : "5678", 
+                    "connected" : True, 
+                    "ssid" : "Leapfrog2",
+                    "ip" : "127.0.0.2"
+                    } 
+                }
 
-        status = {}
-        ips = {}
+        result = {}
+
         interfaces = self.get_interfaces()
-        wifis = self.scan_wifi()
 
         for interface in interfaces:
-            status[interface] = self.is_device_active(interfaces[interface])
+            result[interface] = {}
+            result[interface]["connection_uuid"] = interfaces[interface]["connection_uuid"]
+            result[interface]["connected"] = self.is_device_active(interfaces[interface]["device"])
+            
             if self.is_device_active(interfaces[interface]):
-                ips[interface] = self._get_interface_ip(interfaces[interface])
+                result[interface]["ip"] = self._get_interface_ip(interfaces[interface]["device"])
 
-        active = {}
-        if status["wifi"]:
-            connections = self.get_active_connections()
-            for connection in connections:
-                if connection["device"] == interfaces["wifi"]:
-                    name = connection["name"]
-            for wifi in wifis:
-                if wifi["ssid"] == name:
-                    active = wifi
-
-        return dict(connection=status, wifi=active, ip=ips)
+            if interface == "wifi":
+                details = self.get_configured_connection_details(interfaces[interface]["connection_uuid"])
+                result[interface]["ssid"] = details["802-11-wireless.ssid"]
+            
+        return result
 
     def get_configured_connections(self):
         """
@@ -134,6 +150,7 @@ class Nmcli:
         """
         command = ["-t", "-f", "name, uuid, type", "c"]
         keys =["name", "uuid", "type"]
+
         parse = self._sanatize_parse(self._send_command(command))
 
         configured_connections = self._map_parse(parse, keys)
@@ -153,31 +170,88 @@ class Nmcli:
         """
 
         command = ["con", "delete", "uuid", uuid]
+        
         result = self._send_command(command)
+
         if result[0]:
-            pprint.pprint("An error occurred deleting a connection") 
+            self.logger.warn("An error occurred deleting a connection") 
             return False
         else:
-            pprint.pprint("Connection with uuid: {uuid} deleted".format(uuid=uuid))
+            self.logger.info("Connection with uuid: {uuid} deleted".format(uuid=uuid))
             return True
 
     def get_configured_connection_details(self, uuid):
         command = ["-t", "con", "show", uuid ]
-        result = self._sanatize_parse_key_value(self._send_command(command))
+        
+        if self.mocking:
+            if uuid == "1234":
+                # Ethernet
+                details = {
+                "connection.type": "802-3-ethernet",
+                "802-3-ethernet.mac-address": "12:34:56:WI:RE:D0:00",
+                "ipv4.method" : "manual",
+                "ipv4.addresses" : "ip = 127.0.0.1/24",
+                "ipv4.routes" : "dst = 192.168.0.1/24",
+                "ipv4.dns" : "1.1.1.1 2.2.2.2"
+                }
+            elif uuid == "5678":
+                # Wifi
+                details = {
+                    "connection.type": "802-11-wireless",
+                    "802-11-wireless.ssid": "Leapfrog2",
+                    "802-11-wireless.mac-address": "12:34:56:WI:RE:LE:SS",
+                    "ipv4.method" : "auto",
+                    "ipv4.addresses" : "ip = 127.0.0.2/24",
+                    "ipv4.routes" : "dst = 192.168.0.1/24",
+                    "ipv4.dns" : "8.8.8.8 4.4.4.4"
+                    }
+        else:
+            details = self._sanatize_parse_key_value(self._send_command(command))
+
+        result = {
+            "uuid": uuid,
+            "name": self._get_connection_name(details),
+            "macaddress": self._get_mac_address(details),
+            "isWireless": "wireless" in details["connection.type"],
+            "psk": "",
+            "ipv4": {
+                "method": details["ipv4.method"],
+                "ip": self._get_ipv4_address(details["ipv4.addresses"]),
+                "gateway": self._get_gateway_ipv4_address(details["ipv4.routes"]),
+                "dns": details["ipv4.dns"].split()
+                }
+            }
+
         return result
 
-    def set_configured_connection_details(self, uuid, new_settings):
+    def set_configured_connection_details(self, uuid, connection_details):
         command = ["-t", "con", "modify", uuid ]
+        new_settings = {}
+
+        if connection_details["isWireless"] and "psk" in connection_details and connection_details["psk"]:
+            new_settings["802-11-wireless-security.psk"] = connection_details["psk"]
+
+        new_settings["ipv4.method"] = connection_details["ipv4"]["method"]
+
+        if new_settings["ipv4.method"] == "manual":
+            new_settings["ipv4.ip"] = connection_details["ipv4"]["ip"]
+            new_settings["ipv4.routes"] = connection_details["ipv4"]["gateway"]
+            new_settings["ipv4.dns"] = " ".join(connection_details["ipv4"]["dns"])
 
         for setting, value in new_settings.iteritems():
-            command.append(setting, value)
+            command.append(setting)
+            command.append("\"" + value + "\"")
+
+        exitcode, _ = self._send_command(command)
+
+        return exitcode == 0
 
     def clear_configured_connection(self, ssid):
         """
         Delete all wifi configurations with ssid in name. Might be needed after multiple of the same connetions are created
         """
         for connection in self.get_configured_connections():
-            pprint.pprint(connection)
+            self.logger.info("Deleting connection {0}".format(connection["name"])) 
             if ssid in connection["name"]:
                 self.delete_configured_connection(connection["uuid"])
 
@@ -188,9 +262,11 @@ class Nmcli:
         """
         interfaces = self.get_interfaces()
 
-        device = interfaces[interface]
-
-        return self._disconnect_device(device)
+        if interface in interfaces:
+            device = interfaces[interface]["device"]
+            return self._disconnect_device(device)
+        else:
+            self.logger.error("Could not find interface {0}".format(interface))
 
     def _disconnect_device(self, device):
         """ 
@@ -199,8 +275,9 @@ class Nmcli:
         """
 
         if self.is_device_active(device):
-                command = ["dev", "disconnect", device]
-                return self._send_command(command)
+            command = ["dev", "disconnect", device]
+            
+            return self._send_command(command)
         return (1, "Device not active") 
 
     def is_wifi_configured(self):
@@ -224,11 +301,13 @@ class Nmcli:
         command = ["-t", "-f", "device, state", "device", "status"]
         devices = self._sanatize_parse(self._send_command(command))
 
-        for elem in devices:
-            if device in elem:
-                if elem[1] == "connected":
-                    return True
-                return False
+        if self.mocking:
+            return True
+
+        if devices:
+            for elem in devices:
+                if device in elem:
+                    return elem[1] == "connected"
 
         # We didnt find any device matching, return False also
         return False 
@@ -267,7 +346,8 @@ class Nmcli:
         command = ["dev", "wifi", "connect", ssid]
         if psk:
             command.extend(["password", psk])
-        pprint.pprint("Trying to create new connection")
+
+        self.logger.info("Trying to create new connection for {0}".format(ssid))
         
         return self._send_command(command)
 
@@ -283,15 +363,20 @@ class Nmcli:
 
     def get_interfaces(self):
         """
-        Return list of interfaces with key: value, name: interface
-
-        For example ['ethernet': 'eth0', 'wifi': 'wlan0']
+        Return list of interfaces
+        For example {'ethernet': { 'device': 'eth0', 'connection_uuid' : '1234-ab-..' }, 'wifi': { 'device': 'wlan0', 'connection_uuid' : '1234-ab-..' }}
         """
-        command = ["-t","-f","type, device", "dev"]
+        command = ["-t","-f","type, device, con-uuid", "dev"]
 
         parse = self._sanatize_parse(self._send_command(command))
 
-        interfaces = dict((x[0], x[1]) for x in parse)
+        if self.mocking:
+            return {'ethernet': { 'device': 'eth0', 'connection_uuid' : '1234' }, 'wifi': { 'device': 'wlan0', 'connection_uuid' : '5678' }}
+
+        if parse:
+            interfaces = dict((x[0], { "device": x[1], "connection_uuid": x[2] }) for x in parse)
+        else:
+            interfaces = dict()
 
         return interfaces
 
@@ -364,11 +449,10 @@ class Nmcli:
         """
         Check the nmcli version value as this wrapper is only compatible with 0.9.9.0 and up.
         """
-        response = self._send_command(["--version"])
+        exit_code, response = self._send_command(["--version"])
         
-        if response:
-
-            parts = response[1].split()
+        if exit_code == 0:
+            parts = response.split()
             ver = parts[-1]
             compare = self.vercmp(ver, "0.9.9.0")
             if compare >= 0:
@@ -378,6 +462,43 @@ class Nmcli:
                 return False
         else:
             return False
+
+    def _get_connection_name(self, connection_details):
+        if "802-11-wireless.ssid" in connection_details:
+            return connection_details["802-11-wireless.ssid"]
+        else:
+            return "Wired"
+
+    def _get_ipv4_address(self, ip_details):
+        look_for_start = "ip = "
+        look_for_end = "/"
+
+        start_idx = ip_details.find(look_for_start)
+        end_idx = ip_details.find(look_for_end, start_idx+len(look_for_start))
+
+        if start_idx > -1 and end_idx > -1:
+            return ip_details[start_idx+len(look_for_start):end_idx]
+
+    def _get_gateway_ipv4_address(self, ip_details):
+        look_for_start = "dst = "
+        look_for_end = "/"
+
+        start_idx = ip_details.find(look_for_start)
+        end_idx = ip_details.find(look_for_end, start_idx+len(look_for_start))
+
+        if start_idx > -1 and end_idx > -1:
+            return ip_details[start_idx+len(look_for_start):end_idx]
+
+    def _get_mac_address(self, connection_details):
+        look_for = ["802-11-wireless.mac-address", "802-3-ethernet.mac-address"]
+        
+        for find in look_for:
+            if find in connection_details:
+                return connection_details[find]
+
+    def _log_command(self, command):
+        command_str = " ".join(command)
+        self.logger.debug("NMCLI Sending command: {0}".format(command_str))
 
     def vercmp(self, actual, test):
         def normalize(v):

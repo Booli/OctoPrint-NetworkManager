@@ -22,10 +22,10 @@ class NetworkManagerPlugin(octoprint.plugin.SettingsPlugin,
     ##~~ Init
     def __init__(self):
         self.ncmli = None
+        self.mocking = sys.platform == "win32" or sys.platform == "darwin"
 
     def initialize(self):
-        self.nmcli = Nmcli()
-
+        self.nmcli = Nmcli(self.mocking)
 
     ##~~ SettingsPlugin mixin
 
@@ -56,7 +56,7 @@ class NetworkManagerPlugin(octoprint.plugin.SettingsPlugin,
     ##~~ BlueprintPlugin mixin
 
     @octoprint.plugin.BlueprintPlugin.route("/", methods=["GET"])
-    def get_status(self, request):
+    def get_status(self):
         try:
             status = self._get_status()
             if status:
@@ -76,7 +76,15 @@ class NetworkManagerPlugin(octoprint.plugin.SettingsPlugin,
     @octoprint.plugin.BlueprintPlugin.route("/connection_details/<string:id>", methods=["GET"])
     def get_connection_details(self, id):
         connection_details = self._get_connection_details(id)
-        return make_response(jsonify(connection_details), 200)
+        return make_response(jsonify(details=connection_details), 200)
+
+    @octoprint.plugin.BlueprintPlugin.route("/connection_details/<string:id>", methods=["POST"])
+    def set_connection_details(self, id):
+        connection_details = request.json["details"]
+        if self._set_connection_details(id, connection_details):
+            return make_response(jsonify(), 200)
+        else:
+            return make_response(jsonify(), 400)
 
     @octoprint.plugin.BlueprintPlugin.route("/scan_wifi", methods=["POST"])
     def scan_wifi(self):
@@ -115,80 +123,21 @@ class NetworkManagerPlugin(octoprint.plugin.SettingsPlugin,
     ##~~ Private functions to retrieve info
 
     def _get_status(self):
-        if sys.platform == "win32" or sys.platform == "darwin":
-            return dict(connection = dict(wifi = True, ethernet = True), ip = dict(wifi = "127.0.0.1", ethernet = "127.0.0.1"), wifi = dict(ssid = None, signal = None, security = None))
-        else:
-            return self.nmcli.get_status()
+         return self.nmcli.get_status()
 
     def _get_connection_details(self, uuid):
-        details = nmcli.get_configured_connection_details(uuid)
-
-        result = {
-            "name": self._get_connection_name(details),
-            "macaddress": self._get_mac_address(details),
-            "ipv4": {
-                "method": details["ipv4.method"],
-                "ip": self._get_ipv4_address(details["ipv4.addresses"]),
-                "gateway": self._get_gateway_ipv4_address(details["ipv4.routes"]),
-                }
-            }
-
-        dns_servers = details["ipv4.dns"].split()
-
-        i = 1
-        for server in dns_servers:
-            result["ipv4"].extend("dns" + i, server)
-            i += 1
-
-        return result
+        return self.nmcli.get_configured_connection_details(uuid)
 
     def _set_connection_details(self, uuid, new_settings):
-        details = nmcli.set_configured_connection_details(uuid, new_settings)
-
-    def _get_connection_name(self, connection_details):
-        if "802-11-wireless.ssid" in connection_details:
-            return connection_details["802-11-wireless.ssid"]
-        else:
-            return "Wired"
-
-    def _get_ipv4_address(self, ip_details):
-        look_for_start = "ip = "
-        look_for_end = "/"
-
-        start_idx = ip_details.find(look_for_start)
-        end_idx = ip_details.find(look_for_end, start_idx+len(look_for_start))
-
-        if start_idx > -1 and end_idx > -1:
-            return ip_details[start_idx+len(look_for_start):end_idx]
-
-    def _get_gateway_ipv4_address(self, ip_details):
-        look_for_start = "dst = "
-        look_for_end = "/"
-
-        start_idx = ip_details.find(look_for_start)
-        end_idx = ip_details.find(look_for_end, start_idx+len(look_for_start))
-
-        if start_idx > -1 and end_idx > -1:
-            return ip_details[start_idx+len(look_for_start):end_idx]
-
-    def _get_mac_address(self, connection_details):
-        look_for = ["802-11-wireless.mac-address", "802-3-ethernet.mac-address"]
+        return self.nmcli.set_configured_connection_details(uuid, new_settings)
         
-        for find in look_for:
-            if find in connection_details:
-                return connection_details[find]
-
     def _get_wifi_list(self, force=False):
         result = []
 
-        if sys.platform == "win32" or sys.platform == "darwin":
-            for i in range(0,20):
-                result.append(dict(ssid="Leapfrog%d" % (i+1), signal=(20-i)*5, security=(i%2==0)))
-        else:
-            content = self.nmcli.scan_wifi(force=force)
+        content = self.nmcli.scan_wifi(force=force)
             
-            for wifi in content:
-                result.append(dict(ssid=wifi["ssid"], signal=wifi["signal"], security=wifi["security"] if "security" in wifi else None))
+        for wifi in content:
+            result.append(dict(ssid=wifi["ssid"], signal=wifi["signal"], security=wifi["security"] if "security" in wifi else None))
         
         return result
 
