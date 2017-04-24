@@ -81,7 +81,8 @@ class NetworkManagerPlugin(octoprint.plugin.SettingsPlugin,
     @octoprint.plugin.BlueprintPlugin.route("/connection_details/<string:id>", methods=["POST"])
     def set_connection_details(self, id):
         connection_details = request.json["details"]
-        if self._set_connection_details(id, connection_details):
+        connection_details = request.json["interface"]
+        if self._set_connection_details(id, interface, connection_details):
             return make_response(jsonify(), 200)
         else:
             return make_response(jsonify(), 400)
@@ -97,7 +98,7 @@ class NetworkManagerPlugin(octoprint.plugin.SettingsPlugin,
         if not admin_permission.can():
             return make_response(jsonify({ "message": "Insufficient rights"}, 403))
 
-        data = request.values
+        data = request.json
         if "psk" in data:
             self._logger.info("Configuring wifi {ssid} and psk...".format(**data))
         else:
@@ -128,8 +129,8 @@ class NetworkManagerPlugin(octoprint.plugin.SettingsPlugin,
     def _get_connection_details(self, uuid):
         return self.nmcli.get_configured_connection_details(uuid)
 
-    def _set_connection_details(self, uuid, new_settings):
-        return self.nmcli.set_configured_connection_details(uuid, new_settings)
+    def _set_connection_details(self, uuid, interface, new_settings):
+        return self.nmcli.set_configured_connection_details(uuid, interface, new_settings)
         
     def _get_wifi_list(self, force=False):
         result = []

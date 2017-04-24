@@ -49,7 +49,7 @@ $(function() {
                 })
             }
         };
-
+        self.connectionDetailsTargetInterface = undefined;
         self.connectionDetailsEditorVisible = ko.observable(false);
 
         self.status = {
@@ -143,9 +143,11 @@ $(function() {
 
         };
 
-        self.editConnectionDetails = function(uuid)
+        self.editConnectionDetails = function(targetInterface, uuid)
         {
             if (!self.loginState.isAdmin()) return; // Maybe do something with this return 
+
+            self.connectionDetailsTargetInterface = targetInterface;
 
             self.working(true);
 
@@ -168,7 +170,7 @@ $(function() {
 
             data = ko.mapping.toJS(self.connectionDetails);
 
-            self._postCommand("connection_details/" + self.connectionDetails.uuid(), { details: data })
+            self._postCommand("connection_details/" + self.connectionDetails.uuid(), { "details": data, "interface": self.connectionDetailsTargetInterface })
             .done(function () {
 
                 self.connectionDetailsEditorVisible(false);
@@ -191,6 +193,7 @@ $(function() {
 
             }).always(function () {
                 self.working(false);
+                self.requestData();
             });
         };
 

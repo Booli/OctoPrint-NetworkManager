@@ -49,6 +49,8 @@ class Nmcli:
                 #An error occured, return the return code and one string of the 
                 return result.returncode, output
 
+            self._log_command_output(result.returncode, output)
+
             return result.returncode, output
         except OSError as e:
             self.logger.warn("OSError: {error}, file: {filename}, error: {message}".format(error=e.errno, filename=e.filename, message=e.strerror))
@@ -71,7 +73,12 @@ class Nmcli:
         keys = ["ssid", "signal", "security"]
 
         # Parse command
-        parse = self._sanatize_parse(self._send_command(command))
+        returncode, output = self._send_command(command)
+
+        if returncode != 0:
+            return None
+
+        parse = self._sanatize_parse(output)
 
         if self.mocking:
             result = []
@@ -131,16 +138,21 @@ class Nmcli:
         interfaces = self.get_interfaces()
 
         for interface in interfaces:
-            result[interface] = {}
-            result[interface]["connection_uuid"] = interfaces[interface]["connection_uuid"]
-            result[interface]["connected"] = self.is_device_active(interfaces[interface]["device"])
+            props = {}
+            props["connection_uuid"] = interfaces[interface]["connection_uuid"]
+            props["connected"] = self.is_device_active(interfaces[interface]["device"])
             
-            if self.is_device_active(interfaces[interface]):
-                result[interface]["ip"] = self._get_interface_ip(interfaces[interface]["device"])
+            if props["connected"]:
+                props["ip"] = self._get_interface_ip(interfaces[interface]["device"])
 
-            if interface == "wifi":
+            if interface == "wifi" and interfaces[interface]["connection_uuid"]:
                 details = self.get_configured_connection_details(interfaces[interface]["connection_uuid"])
-                result[interface]["ssid"] = details["802-11-wireless.ssid"]
+                if details:
+                    props["ssid"] = details["802-11-wireless.ssid"]
+                else:
+                    props["ssid"] = None
+
+            result[interface] = props
             
         return result
 
@@ -151,7 +163,12 @@ class Nmcli:
         command = ["-t", "-f", "name, uuid, type", "c"]
         keys =["name", "uuid", "type"]
 
-        parse = self._sanatize_parse(self._send_command(command))
+        returncode, output = self._send_command(command)
+
+        if returncode != 0:
+            return None
+
+        parse = self._sanatize_parse(output)
 
         configured_connections = self._map_parse(parse, keys)
 
@@ -206,7 +223,11 @@ class Nmcli:
                     "ipv4.dns" : "8.8.8.8 4.4.4.4"
                     }
         else:
-            details = self._sanatize_parse_key_value(self._send_command(command))
+            returncode, output = self._send_command(command)
+            if returncode == 0:
+                details = self._sanatize_parse_key_value(output)
+            else:
+                return None
 
         result = {
             "uuid": uuid,
@@ -224,7 +245,7 @@ class Nmcli:
 
         return result
 
-    def set_configured_connection_details(self, uuid, connection_details):
+    def set_configured_connection_details(self, uuid, interface, connection_details):
         command = ["-t", "con", "modify", uuid ]
         new_settings = {}
 
@@ -234,15 +255,19 @@ class Nmcli:
         new_settings["ipv4.method"] = connection_details["ipv4"]["method"]
 
         if new_settings["ipv4.method"] == "manual":
-            new_settings["ipv4.ip"] = connection_details["ipv4"]["ip"]
-            new_settings["ipv4.routes"] = connection_details["ipv4"]["gateway"]
-            new_settings["ipv4.dns"] = " ".join(connection_details["ipv4"]["dns"])
+            new_settings["ipv4.addresses"] = connection_details["ipv4"]["ip"] if connection_details["ipv4"]["ip"] else ""
+            new_settings["ipv4.routes"] = connection_details["ipv4"]["gateway"] if connection_details["ipv4"]["gateway"] else ""
+            new_settings["ipv4.dns"] = " ".join(connection_details["ipv4"]["dns"]) if connection_details["ipv4"]["dns"] else ""
 
         for setting, value in new_settings.iteritems():
             command.append(setting)
-            command.append("\"" + value + "\"")
+            command.append(value)
 
         exitcode, _ = self._send_command(command)
+
+        if exitcode == 0:
+            self.disconnect_interface(interface)
+            self.connect_interface(interface)
 
         return exitcode == 0
 
@@ -258,13 +283,26 @@ class Nmcli:
 
     def disconnect_interface(self, interface):
         """
-        Disconnect either 'wifi' or 'ethernet'. Uses disconnect_device and is_device_active to disconnect an interface.__init__.py
+        Disconnect either 'wifi' or 'ethernet'. Uses disconnect_device and is_device_active to disconnect an interface.
         """
         interfaces = self.get_interfaces()
 
         if interface in interfaces:
             device = interfaces[interface]["device"]
             return self._disconnect_device(device)
+        else:
+            self.logger.error("Could not find interface {0}".format(interface))
+
+
+    def connect_interface(self, interface):
+        """
+        Connect either 'wifi' or 'ethernet'. Uses connect_device and is_device_active to connect an interface.
+        """
+        interfaces = self.get_interfaces()
+
+        if interface in interfaces:
+            device = interfaces[interface]["device"]
+            return self._connect_device(device)
         else:
             self.logger.error("Could not find interface {0}".format(interface))
 
@@ -280,13 +318,27 @@ class Nmcli:
             return self._send_command(command)
         return (1, "Device not active") 
 
+    def _connect_device(self, device):
+
+        if not self.is_device_active(device):
+            command = ["dev", "connect", device]
+            
+            return self._send_command(command)
+        return (1, "Device not active") 
+
     def is_wifi_configured(self):
         """
         Checks if wifi is configured on the machine
         """
 
         command = ["-t", "-f", "type", "dev"]
-        devices = self._sanatize_parse(self._send_command(command))
+
+        returncode, output = self._send_command(command)
+
+        if returncode != 0:
+            return None
+
+        devices = self._sanatize_parse(output)
 
         for device in devices:
             if "wifi" in device:
@@ -299,14 +351,20 @@ class Nmcli:
         Returns True if active, falls if not active
         """
         command = ["-t", "-f", "device, state", "device", "status"]
-        devices = self._sanatize_parse(self._send_command(command))
+        
+        returncode, output = self._send_command(command)
+
+        if returncode != 0:
+            return None
+
+        devices = self._sanatize_parse(output)
 
         if self.mocking:
             return True
 
         if devices:
             for elem in devices:
-                if device in elem:
+                if elem[0] == device:
                     return elem[1] == "connected"
 
         # We didnt find any device matching, return False also
@@ -321,7 +379,12 @@ class Nmcli:
         command = ["-t", "-f", "NAME, DEVICE, TYPE", "c", "show", "--active"]
         keys = ["name", "device", "type"]
 
-        parse = self._sanatize_parse(self._send_command(command))
+        returncode, output = self._send_command(command)
+
+        if returncode != 0:
+            return None
+
+        parse = self._sanatize_parse(output)
 
         connections = self._map_parse(parse, keys)
 
@@ -368,13 +431,18 @@ class Nmcli:
         """
         command = ["-t","-f","type, device, con-uuid", "dev"]
 
-        parse = self._sanatize_parse(self._send_command(command))
+        returncode, output = self._send_command(command)
+
+        if returncode != 0:
+            return None
+
+        parse = self._sanatize_parse(output)
 
         if self.mocking:
             return {'ethernet': { 'device': 'eth0', 'connection_uuid' : '1234' }, 'wifi': { 'device': 'wlan0', 'connection_uuid' : '5678' }}
 
         if parse:
-            interfaces = dict((x[0], { "device": x[1], "connection_uuid": x[2] }) for x in parse)
+            interfaces = dict((x[0], { "device": x[1], "connection_uuid": x[2] if x[2] != "--" else None }) for x in parse)
         else:
             interfaces = dict()
 
@@ -386,7 +454,13 @@ class Nmcli:
         """
 
         command = ["-t", "-f", "IP4.ADDRESS", "d", "show", device] 
-        parse = self._sanatize_parse(self._send_command(command))
+
+        returncode, output = self._send_command(command)
+
+        if returncode != 0:
+            return None
+
+        parse = self._sanatize_parse(output)
 
         ip = None
         for elem in parse[0]:
@@ -407,9 +481,8 @@ class Nmcli:
         """
         Sanatizes the parse. using the -t command of nmli, ':' is used to split
         """
-        #Check if command executed correctly[returncode 0], otherwise return nothing
-        if not output[0]:
-            parse = output[1].splitlines()
+        if output:
+            parse = output.splitlines()
             parse_split = []
             for line in parse:
                 line = line.split(":")
@@ -421,8 +494,8 @@ class Nmcli:
         Sanatizes the parse. using the -t command of nmli, ':' is used to split. Returns key-value pairs
         """
         #Check if command executed correctly[returncode 0], otherwise return nothing
-        if not output[0]:
-            parse = output[1].splitlines()
+        if output:
+            parse = output.splitlines()
             parse_split = {}
             for line in parse:
                 line = line.split(":")
@@ -499,6 +572,9 @@ class Nmcli:
     def _log_command(self, command):
         command_str = " ".join(command)
         self.logger.debug("NMCLI Sending command: {0}".format(command_str))
+
+    def _log_command_output(self, returncode, output):
+        self.logger.debug("NMCLI Exitcode: {0} Output: {1}".format(returncode, output))
 
     def vercmp(self, actual, test):
         def normalize(v):
