@@ -26,8 +26,8 @@ $(function() {
             name: ko.observable(),
             ssid: ko.observable(),
             psk: ko.observable(),
-            macAddress: ko.observable(),
             isWireless: ko.observable(),
+            targetInterface: ko.observable('ethernet'),
             ipv4:
             {
                 method: ko.observable(),
@@ -48,7 +48,7 @@ $(function() {
                 })
             }
         };
-        self.connectionDetailsTargetInterface = undefined;
+
         self.connectionDetailsEditorVisible = ko.observable(false);
 
         self.status = {
@@ -58,14 +58,16 @@ $(function() {
                     connected: ko.observable(),
                     ip: ko.observable(),
                     ssid: ko.observable(),
-                    enabled: ko.observable()
+                    enabled: ko.observable(),
+                    macAddress: ko.observable()
                 },
             ethernet:
                 {
                     uuid: ko.observable(),
                     connected: ko.observable(),
                     ip: ko.observable(),
-                    enabled: ko.observable()
+                    enabled: ko.observable(),
+                    macAddress: ko.observable()
                 }
         };
 
@@ -131,15 +133,15 @@ $(function() {
 
             newConnection = newConnection || false;
 
-            self.connectionDetailsTargetInterface = targetInterface;
-
             self.working(true);
             var url = OctoPrint.getBlueprintUrl("networkmanager") + "connection_details/" + uuid
             OctoPrint.get(url)
                 .done(function (response) {
                     ko.mapping.fromJS(response.details, {}, self.connectionDetails);
 
+                    self.connectionDetails.psk(undefined);
                     self.connectionDetails.newConnection(newConnection);
+                    self.connectionDetails.targetInterface(targetInterface);
 
                     self.connectionDetailsEditorVisible(true);
                 }).always(function () {
@@ -153,7 +155,7 @@ $(function() {
 
             data = ko.mapping.toJS(self.connectionDetails);
 
-            self._postCommand("connection_details/" + self.connectionDetails.uuid(), { "details": data, "interface": self.connectionDetailsTargetInterface })
+            self._postCommand("connection_details/" + self.connectionDetails.uuid(), { "details": data, "interface": self.connectionDetails.targetInterface() })
             .done(function () {
 
                 self.connectionDetailsEditorVisible(false);
@@ -165,24 +167,27 @@ $(function() {
                    "success"
                 );
 
+                self.requestData(true);
+
             }).fail(function () {
                 if (self.connectionDetails.newConnection()) {
                     $.notify({
                         title: "Connection failed",
-                        text: "The printer was unable to connect to the wifi network \"" + self.editorWifiSsid() + "\". " + (self.editorWifiPassphrase1() ? ' Please check if you entered the correct password.' : '')
+                        text: "The printer was unable to connect to the wifi network \"" + self.connectionDetails.ssid() + "\". " + (self.connectionDetails.psk() ? ' Please check if you entered the correct password.' : '')
                     },
                            "error"
                        );
+                } else {
                     $.notify({
                         title: "Could not save connection settings",
                         text: "Please verify the settings you have entered and try again."
                     },
                       "error"
-                   );
+                    );
                 }
 
-            }).always(function () {
-                self.requestData(true);
+                self.working(false);
+
             });
         };
 
@@ -193,16 +198,24 @@ $(function() {
         self.configureWifi = function(data) {
             if (!self.loginState.isAdmin()) return; // Maybe do something with this return 
 
+            
+
             if (data.connectionUuid) {
+                // We have seen this connection previously
+                // Give user opportunity to edit some settings
                 self.editConnectionDetails("wifi", data.connectionUuid, true);
             }
             else if(!data.security)
             {
-                //TODO: Try and connect straight away
+                // Try and connect straight away
+                self.sendWifiConfig(data.ssid)
             }
             else {
+                // Its a new connection that may require a PSK
+                self.setDefaultConnectionDetails();
+                self.connectionDetails.targetInterface('wifi');
                 self.connectionDetails.newConnection(true);
-                self.connectionDetails.ipv4.method("auto");
+                self.connectionDetails.isWireless(true);
                 self.connectionDetails.ssid(data.ssid);
                 self.connectionDetailsEditorVisible(true);
             }
@@ -255,7 +268,7 @@ $(function() {
                 self.pollingTimeoutId = undefined;
             }
 
-            var url = OctoPrint.getBlueprintUrl("networkmanager")
+            var url = OctoPrint.getBlueprintUrl("networkmanager");
             OctoPrint.get(url).done(self.fromResponse).always(function()
             {
                 if (showWorker)
@@ -282,6 +295,22 @@ $(function() {
                     self.working(false);
                 });
         };
+
+        self.setDefaultConnectionDetails = function()
+        {
+            self.connectionDetails.ipv4.method("auto");
+            self.connectionDetails.ipv4.dns1(undefined);
+            self.connectionDetails.ipv4.dns2(undefined);
+            self.connectionDetails.ipv4.gateway(undefined);
+            self.connectionDetails.ipv4.ip(undefined);
+            self.connectionDetails.isWireless(false);
+            self.connectionDetails.name(undefined);
+            self.connectionDetails.newConnection(false);
+            self.connectionDetails.psk(undefined);
+            self.connectionDetails.ssid(undefined);
+            self.connectionDetails.uuid(undefined);
+            self.connectionDetails.targetInterface('ethernet');
+        }
 
         self.onAfterBinding = function () {
             self.status.wifi.enabled.subscribe(self.onWifiEnabledChanged);
@@ -367,12 +396,14 @@ $(function() {
                 self.status.ethernet.ip(response.status.ethernet.ip);
                 self.status.ethernet.uuid(response.status.ethernet.connection_uuid);
                 self.status.ethernet.enabled(response.status.ethernet.enabled);
+                self.status.ethernet.macAddress(response.status.ethernet.mac_address);
 
                 self.status.wifi.connected(response.status.wifi.connected);
                 self.status.wifi.ip(response.status.wifi.ip);
                 self.status.wifi.ssid(response.status.wifi.ssid);
                 self.status.wifi.uuid(response.status.wifi.connection_uuid);
                 self.status.wifi.enabled(response.status.wifi.enabled);
+                self.status.wifi.macAddress(response.status.wifi.mac_address);
 
                 self.statusCurrentWifi(undefined);
                 if (response.status.wifi.ssid) {
@@ -401,6 +432,7 @@ $(function() {
                         ssid: wifi.ssid,
                         signal: wifi.signal,
                         security: wifi.security,
+                        connectionUuid: wifi.connectionUuid
                     });
                 });
 

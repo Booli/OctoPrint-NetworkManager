@@ -118,7 +118,7 @@ class NetworkManagerPlugin(octoprint.plugin.SettingsPlugin,
             self._logger.info("Configuring wifi {ssid}...".format(**data))
             data['psk'] = None
 
-        return self._configure_and_select_wifi(ssid=data["ssid"], psk=data["psk"])
+        return self.nmcli.add_wifi_connection(ssid=data["ssid"], psk=data["psk"])
 
     @octoprint.plugin.BlueprintPlugin.route("/wifi/disconnect", methods=["POST"])
     def disconnect_wifi(self):
@@ -143,7 +143,7 @@ class NetworkManagerPlugin(octoprint.plugin.SettingsPlugin,
         return self.nmcli.get_configured_connection_details(uuid)
 
     def _set_connection_details(self, uuid, interface, new_settings):
-        return self.nmcli.set_configured_connection_details(uuid, interface, new_settings)
+        return self.nmcli.set_configured_connection_details(interface, new_settings, uuid)
         
     def _get_wifi_list(self, force=False):
         result = []
@@ -177,13 +177,6 @@ class NetworkManagerPlugin(octoprint.plugin.SettingsPlugin,
 
     def _delete_configured_connection(self, uuid):
         return self.nmcli.delete_configured_connection(uuid)
-
-    def _configure_and_select_wifi(self, ssid, psk):
-        returncode, output = self.nmcli.connect_wifi(ssid, psk)
-        if (returncode != 0):
-            return make_response(jsonify({"message":"An error occured with text{output}".format(output=output)}), 400)
-        return make_response(jsonify({"message":"Succesful connection: {output}".format(output=output)}), 200)
-
 
     def _set_wifi_enabled(self, enabled):
         self.nmcli.set_wifi_radio(enabled)

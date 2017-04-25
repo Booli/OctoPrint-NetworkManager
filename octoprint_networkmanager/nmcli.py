@@ -152,20 +152,16 @@ class Nmcli:
 
         for interface in interfaces:
             props = {}
+
+            if interfaces[interface]["connection_uuid"]:
+                details = self.get_configured_connection_details(interfaces[interface]["connection_uuid"])
+                props["ssid"] = details["ssid"] if "ssid" in details else None
+                props["ip"] = details["ipv4"]["ip"]
+
             props["connection_uuid"] = interfaces[interface]["connection_uuid"]
             props["connected"] = interfaces[interface]["connected"]
             props["enabled"] = interfaces[interface]["enabled"]
-            
-            if props["connected"]:
-                props["ip"] = self._get_interface_ip(interfaces[interface]["device"])
-
-            if interface == "wifi" and interfaces[interface]["connection_uuid"]:
-                # TODO: Use a method that uses less nmcli data to retrieve the SSID
-                details = self.get_configured_connection_details(interfaces[interface]["connection_uuid"])
-                if details and "ssid" in details:
-                    props["ssid"] = details["ssid"]
-                else:
-                    props["ssid"] = None
+            props["mac_address"] = interfaces[interface]["mac_address"]
 
             result[interface] = props
             
@@ -212,6 +208,7 @@ class Nmcli:
             self.logger.info("Connection with uuid: {uuid} deleted".format(uuid=uuid))
             return True
 
+
     def get_configured_connection_details(self, uuid):
         command = ["-t", "con", "show", uuid ]
         
@@ -247,7 +244,6 @@ class Nmcli:
         result = {
             "uuid": uuid,
             "name": self._get_connection_name(details),
-            "macAddress": self._get_mac_address(details),
             "isWireless": "wireless" in details["connection.type"],
             "ssid": self._get_connection_ssid(details),
             "psk": "",
@@ -261,12 +257,44 @@ class Nmcli:
 
         return result
 
-    def set_configured_connection_details(self, uuid, interface, connection_details):
-        command = ["-t", "con", "modify", uuid ]
+    def set_configured_connection_details(self, interface, connection_details, uuid = None):
+                
         new_settings = {}
 
-        if connection_details["isWireless"] and "psk" in connection_details and connection_details["psk"]:
-            new_settings["802-11-wireless-security.psk"] = connection_details["psk"]
+        if not "psk" in connection_details:
+            connection_details["psk"] = None
+
+        if uuid:
+            # Check if UUID exists, if not, create a new connection
+            returncode, _ = self._send_command(["-t", "con", "show", uuid])
+
+            if returncode == 10: # Connection does not exist
+                if interface == "wifi":
+                    uuid = self.add_wifi_connection(connection_details["ssid"], connection_details["psk"])
+
+                    if not uuid:
+                        self.logger.error("Could not add wifi connection")
+                        return False
+                else:
+                    self.logger.error("Cannot add connection for interface {0}. Only wifi is supported.".format(interface))
+                    return False
+        else:
+            # If no UUID was provided, create a new connection
+            if interface == "wifi":
+                uuid = self.add_wifi_connection(connection_details["ssid"], connection_details["psk"])
+
+                if not uuid:
+                    self.logger.error("Could not add wifi connection")
+                    return False
+            else:
+                self.logger.error("Cannot add connection for interface {0}. Only wifi is supported.".format(interface))
+                return False
+
+        command = ["-t", "con", "modify", uuid ]
+
+        if connection_details["isWireless"]:
+            if "psk" in connection_details and connection_details["psk"]:
+                new_settings["802-11-wireless-security.psk"] = connection_details["psk"]
 
         new_settings["ipv4.method"] = connection_details["ipv4"]["method"]
 
@@ -279,11 +307,13 @@ class Nmcli:
             command.append(setting)
             command.append(value)
 
+
+        # Save changes to connection
         exitcode, _ = self._send_command(command)
 
-        if exitcode == 0:
-            self.disconnect_interface(interface)
-            self.connect_interface(interface)
+        # Apply changes
+        command = [ "con", "up", uuid ]
+        exitcode, _ = self._send_command(command)
 
         return exitcode == 0
 
@@ -416,12 +446,12 @@ class Nmcli:
         return connections
 
 
-    def connect_wifi(self, ssid, psk=None):
+    def add_wifi_connection(self, ssid, psk=None):
         """
         Connect to wifi AP. Should check if configuration of SSID already exists and use that or create a new entry
         """
 
-        #C Check if connection alredy is configured
+        #Check if connection alredy is configured
 
         configured_connections = self.get_configured_connections()
         for connection in configured_connections:
@@ -437,8 +467,19 @@ class Nmcli:
 
         self.logger.info("Trying to create new connection for {0}".format(ssid))
         
-        return self._send_command(command)
+        returncode, output = self._send_command(command)
 
+        if returncode == 0:
+            # Extract the UUID from the output
+            search = re.search("UUID '([a-zA-Z0-9-]*)'", output)
+            if search:
+                found = search.group(1)
+                return found
+            else:
+                self.logger.error("Could not extract UUID from wifi connect response")
+                return None
+        else:
+            return None
 
     def reset_wifi(self):
         """
@@ -470,16 +511,30 @@ class Nmcli:
                     'wifi': { 'device': 'wlan0', 
                              'connection_uuid' : '5678', 
                              'enabled': True }}
+        interfaces = {}
 
         if parse:
-            interfaces = dict((x[0], { 
-                "device": x[1], 
-                "connection_uuid": x[2] if x[2] != "--" else None,
-                "enabled": x[3] != "unavailable" and x[3] != "unmanaged",
-                "connected": x[3] == "connected"
-                }) for x in parse)
-        else:
-            interfaces = dict()
+            for x in parse:
+                if x[0] == "loopback":
+                    continue
+
+                # Retrieve mac address
+                command = ['-t', '-f', 'GENERAL.HWADDR', 'd', 'show', x[1]]
+                returncode, output = self._send_command(command)
+
+                if returncode == 0 and ':' in output:
+                    mac_address = output.split(':', 1)[1].strip()
+                else:
+                    mac_address = None
+
+                # Combine data into nice dicts
+                interfaces[x[0]] = { 
+                    "device": x[1], 
+                    "connection_uuid": x[2] if x[2] != "--" else None,
+                    "enabled": x[3] != "unavailable" and x[3] != "unmanaged",
+                    "connected": x[3] == "connected",
+                    "mac_address":  mac_address
+                    }
 
         return interfaces
 
@@ -603,13 +658,6 @@ class Nmcli:
 
         if start_idx > -1 and end_idx > -1:
             return ip_details[start_idx+len(look_for_start):end_idx]
-
-    def _get_mac_address(self, connection_details):
-        look_for = ["802-11-wireless.mac-address", "802-3-ethernet.mac-address"]
-        
-        for find in look_for:
-            if find in connection_details:
-                return connection_details[find]
 
     def _log_command(self, command):
         command_str = " ".join(command)
