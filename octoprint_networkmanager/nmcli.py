@@ -14,7 +14,6 @@ class Nmcli:
 
         logging.basicConfig(level=logging.INFO)
         self.logger = logging.getLogger("octoprint.plugins.networkmanager.nmcli")
-
         self.mocking = mocking
 
         try: 
@@ -68,17 +67,12 @@ class Nmcli:
         if force:
             self.rescan_wifi()
 
-        command = ["-t", "-f", "SSID, SIGNAL, SECURITY", "dev", "wifi", "list"]
+        command = ["-t", "-f", "ssid, signal, security", "dev", "wifi", "list"]
         # Keys to map the out put to, same as fields describes in the command
         keys = ["ssid", "signal", "security"]
 
         # Parse command
         returncode, output = self._send_command(command)
-
-        if returncode != 0:
-            return None
-
-        parse = self._sanatize_parse(output)
 
         if self.mocking:
             result = []
@@ -86,12 +80,29 @@ class Nmcli:
                 result.append(dict(ssid="Leapfrog%d" % (i+1), signal=(20-i)*5, security=(i%2==0)))
             return result
 
+        
+        if returncode != 0:
+            return None
+
+        if not output:
+            return None
+
+        parse = self._sanatize_parse(output)
+
         # Map output to dict with keys[]
         cells = self._map_parse(parse, keys)
+
+        configured_connections = self.get_configured_connections()
 
         # Convert signal to int
         for cell in cells:
             cell["signal"] = int(cell["signal"])
+            cell["connection_uuid"] = None
+            if configured_connections:
+                for connection in configured_connections:
+                    if cell["ssid"] == connection["name"]:
+                        cell["connection_uuid"] = connection["uuid"]
+                        break
 
         # Filter duplicates and return keep only highest signal entry
         cells = self._filter_cells(cells)
@@ -118,6 +129,7 @@ class Nmcli:
                 connected: bool
                 ip: string
                 ssid: string
+                enabled: bool
         """
         if self.mocking:
             return { 
@@ -129,7 +141,8 @@ class Nmcli:
                     "connection_uuid" : "5678", 
                     "connected" : True, 
                     "ssid" : "Leapfrog2",
-                    "ip" : "127.0.0.2"
+                    "ip" : "127.0.0.2",
+                    "enabled": True
                     } 
                 }
 
@@ -140,15 +153,17 @@ class Nmcli:
         for interface in interfaces:
             props = {}
             props["connection_uuid"] = interfaces[interface]["connection_uuid"]
-            props["connected"] = self.is_device_active(interfaces[interface]["device"])
+            props["connected"] = interfaces[interface]["connected"]
+            props["enabled"] = interfaces[interface]["enabled"]
             
             if props["connected"]:
                 props["ip"] = self._get_interface_ip(interfaces[interface]["device"])
 
             if interface == "wifi" and interfaces[interface]["connection_uuid"]:
+                # TODO: Use a method that uses less nmcli data to retrieve the SSID
                 details = self.get_configured_connection_details(interfaces[interface]["connection_uuid"])
-                if details:
-                    props["ssid"] = details["802-11-wireless.ssid"]
+                if details and "ssid" in details:
+                    props["ssid"] = details["ssid"]
                 else:
                     props["ssid"] = None
 
@@ -232,8 +247,9 @@ class Nmcli:
         result = {
             "uuid": uuid,
             "name": self._get_connection_name(details),
-            "macaddress": self._get_mac_address(details),
+            "macAddress": self._get_mac_address(details),
             "isWireless": "wireless" in details["connection.type"],
+            "ssid": self._get_connection_ssid(details),
             "psk": "",
             "ipv4": {
                 "method": details["ipv4.method"],
@@ -280,6 +296,15 @@ class Nmcli:
             if ssid in connection["name"]:
                 self.delete_configured_connection(connection["uuid"])
 
+
+    def set_wifi_radio(self, enabled):
+        """
+        Sets the wifi radio on or off
+        """
+        command = ["radio", "wifi", "on" if enabled else "off"]
+        returncode, output = self._send_command(command)
+
+        return returncode == 0
 
     def disconnect_interface(self, interface):
         """
@@ -429,7 +454,7 @@ class Nmcli:
         Return list of interfaces
         For example {'ethernet': { 'device': 'eth0', 'connection_uuid' : '1234-ab-..' }, 'wifi': { 'device': 'wlan0', 'connection_uuid' : '1234-ab-..' }}
         """
-        command = ["-t","-f","type, device, con-uuid", "dev"]
+        command = ["-t","-f","type, device, con-uuid, state", "dev"]
 
         returncode, output = self._send_command(command)
 
@@ -439,10 +464,20 @@ class Nmcli:
         parse = self._sanatize_parse(output)
 
         if self.mocking:
-            return {'ethernet': { 'device': 'eth0', 'connection_uuid' : '1234' }, 'wifi': { 'device': 'wlan0', 'connection_uuid' : '5678' }}
+            return {'ethernet': { 'device': 'eth0', 
+                                 'connection_uuid' : '1234', 
+                                 'enabled': True }, 
+                    'wifi': { 'device': 'wlan0', 
+                             'connection_uuid' : '5678', 
+                             'enabled': True }}
 
         if parse:
-            interfaces = dict((x[0], { "device": x[1], "connection_uuid": x[2] if x[2] != "--" else None }) for x in parse)
+            interfaces = dict((x[0], { 
+                "device": x[1], 
+                "connection_uuid": x[2] if x[2] != "--" else None,
+                "enabled": x[3] != "unavailable" and x[3] != "unmanaged",
+                "connected": x[3] == "connected"
+                }) for x in parse)
         else:
             interfaces = dict()
 
@@ -472,9 +507,10 @@ class Nmcli:
 
     def _map_parse(self, parse, keys):
         cells = []
-        for elem in parse:
-            cell = dict(zip(keys, elem))
-            cells.append(cell)
+        if parse:
+            for elem in parse:
+                cell = dict(zip(keys, elem))
+                cells.append(cell)
         return cells
 
     def _sanatize_parse(self, output):
@@ -498,7 +534,7 @@ class Nmcli:
             parse = output.splitlines()
             parse_split = {}
             for line in parse:
-                line = line.split(":")
+                line = line.split(":", 1)
                 if len(line) == 2:
                     parse_split[line[0]] = line[1]
             return parse_split
@@ -535,6 +571,12 @@ class Nmcli:
                 return False
         else:
             return False
+
+    def _get_connection_ssid(self, connection_details):
+        if "802-11-wireless.ssid" in connection_details:
+            return connection_details["802-11-wireless.ssid"]
+        else:
+            return None
 
     def _get_connection_name(self, connection_details):
         if "802-11-wireless.ssid" in connection_details:

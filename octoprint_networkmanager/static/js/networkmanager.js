@@ -17,17 +17,16 @@ $(function() {
         self.pollingEnabled = false;
         self.pollingTimeoutId = undefined;
 
-        self.connectionsId = undefined;
-        self.connectId = undefined;
-
         self.statusCurrentWifi = ko.observable();
         self.enableSignalSorting = ko.observable(false);
 
         self.connectionDetails = {
+            newConnection: ko.observable(false),
             uuid: ko.observable(),
             name: ko.observable(),
+            ssid: ko.observable(),
             psk: ko.observable(),
-            macaddress: ko.observable(),
+            macAddress: ko.observable(),
             isWireless: ko.observable(),
             ipv4:
             {
@@ -58,13 +57,15 @@ $(function() {
                     uuid: ko.observable(),
                     connected: ko.observable(),
                     ip: ko.observable(),
-                    ssid: ko.observable()
+                    ssid: ko.observable(),
+                    enabled: ko.observable()
                 },
             ethernet:
                 {
                     uuid: ko.observable(),
                     connected: ko.observable(),
-                    ip: ko.observable()
+                    ip: ko.observable(),
+                    enabled: ko.observable()
                 }
         };
 
@@ -78,15 +79,8 @@ $(function() {
             return ip || "";
         });
 
-        self.editorWifi = undefined;
-        self.editorWifiSsid = ko.observable();
-        self.editorWifiPassphrase1 = ko.observable();
-        self.editorWifiPassphrase2 = ko.observable();
-        self.editorWifiPassphraseMismatch = ko.computed(function() {
-            return self.editorWifiPassphrase1() !== self.editorWifiPassphrase2();
-        });
-
         self.working = ko.observable(false);
+        self.statusUpdate = false;
         self.error = ko.observable(false);
 
         self.ethernetConnectionText = ko.computed(function() {
@@ -128,40 +122,29 @@ $(function() {
         }
 
         self.refresh = function() {
-            self.requestData();
+            self.requestData(true);
         };
 
-        self.showConnectEditor = function() {
-            self.connectionsId.removeClass('active');
-            self.connectId.addClass('active');
-
-        };
-
-        self.hideConnectEditor = function () {
-            self.connectionsId.addClass('active');
-            self.connectId.removeClass('active');
-
-        };
-
-        self.editConnectionDetails = function(targetInterface, uuid)
+        self.editConnectionDetails = function(targetInterface, uuid, newConnection)
         {
             if (!self.loginState.isAdmin()) return; // Maybe do something with this return 
+
+            newConnection = newConnection || false;
 
             self.connectionDetailsTargetInterface = targetInterface;
 
             self.working(true);
+            var url = OctoPrint.getBlueprintUrl("networkmanager") + "connection_details/" + uuid
+            OctoPrint.get(url)
+                .done(function (response) {
+                    ko.mapping.fromJS(response.details, {}, self.connectionDetails);
 
-            $.ajax({
-                url: OctoPrint.getBlueprintUrl("networkmanager") + "connection_details/" + uuid,
-                type: "GET",
-                dataType: "json"
-            }).done(function (response) {
-                ko.mapping.fromJS(response.details, {}, self.connectionDetails);
-                self.connectionDetailsEditorVisible(true);
-            }).always(function()
-            {
-                self.working(false);
-            })
+                    self.connectionDetails.newConnection(newConnection);
+
+                    self.connectionDetailsEditorVisible(true);
+                }).always(function () {
+                    self.working(false);
+                });
         }
 
         self.saveConnectionDetails = function () {
@@ -183,17 +166,23 @@ $(function() {
                 );
 
             }).fail(function () {
-
-                $.notify({
-                    title: "Could not save connection settings",
-                    text: "Please verify the settings you have entered and try again."
-                },
-                  "error"
-               );
+                if (self.connectionDetails.newConnection()) {
+                    $.notify({
+                        title: "Connection failed",
+                        text: "The printer was unable to connect to the wifi network \"" + self.editorWifiSsid() + "\". " + (self.editorWifiPassphrase1() ? ' Please check if you entered the correct password.' : '')
+                    },
+                           "error"
+                       );
+                    $.notify({
+                        title: "Could not save connection settings",
+                        text: "Please verify the settings you have entered and try again."
+                    },
+                      "error"
+                   );
+                }
 
             }).always(function () {
-                self.working(false);
-                self.requestData();
+                self.requestData(true);
             });
         };
 
@@ -204,53 +193,35 @@ $(function() {
         self.configureWifi = function(data) {
             if (!self.loginState.isAdmin()) return; // Maybe do something with this return 
 
-            self.editorWifi = data;
-            self.editorWifiSsid(data.ssid);
-            self.editorWifiPassphrase1(undefined);
-            self.editorWifiPassphrase2(undefined);
-            if (data.security) {
-                self.showConnectEditor();
-            } else {
-                self.confirmWifiConfiguration();
+            if (data.connectionUuid) {
+                self.editConnectionDetails("wifi", data.connectionUuid, true);
             }
-        };
-
-        self.confirmWifiConfiguration = function() {
-            self.sendWifiConfig(self.editorWifiSsid(), self.editorWifiPassphrase1())
-                .done(function () {
-                    self.cancelWifiConfiguration();
-                }).fail(function () {
-                    $.notify({
-                        title: "Connection failed",
-                        text: "The printer was unable to connect to the wifi network \"" + self.editorWifiSsid() + "\". " + (self.editorWifiPassphrase1() ? ' Please check if you entered the correct password.' : '')
-                    },
-                       "error"
-                   );
-                });
-        };
-
-        self.cancelWifiConfiguration = function() {
-            self.editorWifi = undefined;
-            self.editorWifiSsid(undefined);
-            self.editorWifiPassphrase1(undefined);
-            self.editorWifiPassphrase2(undefined);
-            self.hideConnectEditor();
+            else if(!data.security)
+            {
+                //TODO: Try and connect straight away
+            }
+            else {
+                self.connectionDetails.newConnection(true);
+                self.connectionDetails.ipv4.method("auto");
+                self.connectionDetails.ssid(data.ssid);
+                self.connectionDetailsEditorVisible(true);
+            }
         };
 
         self.sendWifiConfig = function(ssid, psk) {
             if (!self.loginState.isAdmin()) return; // Do something with error again?
 
             self.working(true);
-            return self._postCommand("configure_wifi", {ssid: ssid, psk: psk}, 15000).always(function() {
-                self.working(false);
-            });
+            return self._postCommand("wifi/configure", { ssid: ssid, psk: psk }, 15000)
+                .done(function () { self.requestData(true); }) // Will hide the loading icon
+                .fail(function () { self.working(false); });
         };
 
         self.sendWifiDisconnect = function () {
             if (!self.loginState.isAdmin()) return;
 
             self.working(true);
-            self._postCommand("disconnect_wifi").done(function () {
+            self._postCommand("wifi/disconnect").done(function () {
                 $.notify({
                     title: "Disconnected success",
                     text: "You have successfully disconnected the wifi connection"
@@ -265,31 +236,37 @@ $(function() {
                     "error"
                 );
             }).always(function () {
-                self.requestData();
-                self.working(false);
+                self.requestData(true);
             });
         };
 
         self.sendReset = function() {
             if (!self.loginState.isAdmin()) return;
 
-            self._postCommand("reset");
+            self._postCommand("wifi/reset");
         };
 
-        self.requestData = function () {
+        self.requestData = function (showWorker) {
+            if (showWorker)
+                self.working(true);
+
             if (self.pollingTimeoutId !== undefined) {
                 clearTimeout(self.pollingTimeoutId);
                 self.pollingTimeoutId = undefined;
             }
 
             var url = OctoPrint.getBlueprintUrl("networkmanager")
-            OctoPrint.get(url).done(self.fromResponse);
+            OctoPrint.get(url).done(self.fromResponse).always(function()
+            {
+                if (showWorker)
+                    self.working(false);
+            })
         };
 
         self.sendWifiRefresh = function() {
             self.working(true);
 
-            self._postCommand("scan_wifi")
+            self._postCommand("wifi/scan")
                 .done(function (response) {
                     self.fromResponse(response);
                 })
@@ -306,11 +283,28 @@ $(function() {
                 });
         };
 
+        self.onAfterBinding = function () {
+            self.status.wifi.enabled.subscribe(self.onWifiEnabledChanged);
+        }
 
-        self.onBeforeBinding = function() {
-            self.connectionsId = $('#networkmanager_connections');
-            self.connectId = $('#networkmanager_connect');
-        };
+        self.onWifiEnabledChanged = function (wifiEnabled)
+        {
+            if(!self.statusUpdate)
+            {
+                // If this isn't an automated status update, but a user's action: notify the back-end
+                if (wifiEnabled) {
+                    self.working(true);
+                    self._postCommand('wifi/enable');
+                    // Wait with the refresh
+                    window.setTimeout(self.sendWifiRefresh, 3000);
+                }
+                else {
+                    self.working(true);
+                    self._postCommand('wifi/disable');
+                    self.requestData(true); // Reset the ip address etc
+                }
+            }
+        }
 
         self.onUserLoggedIn = function (user) {
             if (user.admin) {
@@ -366,14 +360,19 @@ $(function() {
 
 
             if (response.status) {
+
+                self.statusUpdate = true;
+
                 self.status.ethernet.connected(response.status.ethernet.connected);
                 self.status.ethernet.ip(response.status.ethernet.ip);
                 self.status.ethernet.uuid(response.status.ethernet.connection_uuid);
+                self.status.ethernet.enabled(response.status.ethernet.enabled);
 
                 self.status.wifi.connected(response.status.wifi.connected);
                 self.status.wifi.ip(response.status.wifi.ip);
                 self.status.wifi.ssid(response.status.wifi.ssid);
                 self.status.wifi.uuid(response.status.wifi.connection_uuid);
+                self.status.wifi.enabled(response.status.wifi.enabled);
 
                 self.statusCurrentWifi(undefined);
                 if (response.status.wifi.ssid) {
@@ -383,6 +382,8 @@ $(function() {
                         }
                     });
                 }
+
+                self.statusUpdate = false;
             }
 
             if (response.wifis) {

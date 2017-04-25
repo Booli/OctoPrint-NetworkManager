@@ -59,12 +59,12 @@ class NetworkManagerPlugin(octoprint.plugin.SettingsPlugin,
     def get_status(self):
         try:
             status = self._get_status()
-            if status:
+            if status and "wifi" in status and status["wifi"]["enabled"]:
                 wifis = self._get_wifi_list()  
             else:
                 wifis = []
         except Exception as e:
-            self._logger.warning(e.message)
+            self._logger.exception(e.message)
             return jsonify(dict(error=e.message))
 
 
@@ -81,19 +81,32 @@ class NetworkManagerPlugin(octoprint.plugin.SettingsPlugin,
     @octoprint.plugin.BlueprintPlugin.route("/connection_details/<string:id>", methods=["POST"])
     def set_connection_details(self, id):
         connection_details = request.json["details"]
-        connection_details = request.json["interface"]
+        interface = request.json["interface"]
         if self._set_connection_details(id, interface, connection_details):
             return make_response(jsonify(), 200)
         else:
             return make_response(jsonify(), 400)
 
-    @octoprint.plugin.BlueprintPlugin.route("/scan_wifi", methods=["POST"])
+
+    @octoprint.plugin.BlueprintPlugin.route("/wifi/enable", methods=["POST"])
+    def enable_wifi(self):
+        self._set_wifi_enabled(True)
+        self._logger.info("Wifi radio enabled")
+        return jsonify()
+
+    @octoprint.plugin.BlueprintPlugin.route("/wifi/disable", methods=["POST"])
+    def disable_wifi(self):
+        self._set_wifi_enabled(False)
+        self._logger.info("Wifi radio disabled")
+        return jsonify()
+
+    @octoprint.plugin.BlueprintPlugin.route("/wifi/scan", methods=["POST"])
     def scan_wifi(self):
         wifis = self._get_wifi_list(force=True)
         self._logger.info("Wifi scan initiated")
         return jsonify(dict(wifis=wifis))
 
-    @octoprint.plugin.BlueprintPlugin.route("/configure_wifi", methods=["POST"])
+    @octoprint.plugin.BlueprintPlugin.route("/wifi/configure", methods=["POST"])
     def configure_wifi(self):
         if not admin_permission.can():
             return make_response(jsonify({ "message": "Insufficient rights"}, 403))
@@ -107,18 +120,18 @@ class NetworkManagerPlugin(octoprint.plugin.SettingsPlugin,
 
         return self._configure_and_select_wifi(ssid=data["ssid"], psk=data["psk"])
 
-    @octoprint.plugin.BlueprintPlugin.route("/disconnect_wifi", methods=["POST"])
+    @octoprint.plugin.BlueprintPlugin.route("/wifi/disconnect", methods=["POST"])
     def disconnect_wifi(self):
         if not admin_permission.can():
             return make_response(jsonify({ "message": "Insufficient rights"}, 403))
 
         return self._disconnect_wifi()
 
-    @octoprint.plugin.BlueprintPlugin.route("/reset", methods=["POST"])
-    def reset(self):
+    @octoprint.plugin.BlueprintPlugin.route("/wifi/reset", methods=["POST"])
+    def reset_wifi(self):
         if not admin_permission.can():
             return make_response(jsonify({ "message": "Insufficient rights"}, 403))
-        self._reset()
+        self._reset_wifi()
         return make_response(jsonify(), 200)
 
     ##~~ Private functions to retrieve info
@@ -136,9 +149,13 @@ class NetworkManagerPlugin(octoprint.plugin.SettingsPlugin,
         result = []
 
         content = self.nmcli.scan_wifi(force=force)
-            
-        for wifi in content:
-            result.append(dict(ssid=wifi["ssid"], signal=wifi["signal"], security=wifi["security"] if "security" in wifi else None))
+        if content:
+            for wifi in content:
+                result.append({ "ssid": wifi["ssid"], 
+                               "signal": wifi["signal"], 
+                               "security": wifi["security"] if "security" in wifi else None,
+                               "connectionUuid": wifi["connection_uuid"]
+                               })
         
         return result
 
@@ -168,13 +185,12 @@ class NetworkManagerPlugin(octoprint.plugin.SettingsPlugin,
         return make_response(jsonify({"message":"Succesful connection: {output}".format(output=output)}), 200)
 
 
-    def _reset(self):
+    def _set_wifi_enabled(self, enabled):
+        self.nmcli.set_wifi_radio(enabled)
+
+    def _reset_wifi(self):
         self.nmcli.reset_wifi()
         self.nmcli.rescan_wifi()
-
-
-
-
 
     ##~~ Softwareupdate hook
 
