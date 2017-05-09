@@ -576,7 +576,7 @@ class Nmcli:
             parse = output.splitlines()
             parse_split = []
             for line in parse:
-                results = list(self._split_esc(line, ":"))
+                results = list(self._split_nmcli_output(line))
                 parse_split.append(results)
             return parse_split
     
@@ -671,6 +671,13 @@ class Nmcli:
             return [int(x) for x in re.sub(r'(\.0+)*$', '', v).split(".")]
         return cmp(normalize(actual), normalize(test))
 
+    def _split_nmcli_output(self, line):
+        result = []
+        for item in self._split_esc(line, ":"):
+            result.append(item.replace("\:",":").replace("\\\\", "\\"))
+
+        return result
+
     def _split_esc(self, string, delimiter):
         """Helper method that allows to split with an escaped character (nmcli escapes the : if needed)"""
         if len(delimiter) != 1:
@@ -678,6 +685,7 @@ class Nmcli:
         ln = len(string)
         i = 0
         j = 0
+        
         while j < ln:
             if string[j] == '\\':
                 if j + 1 >= ln:
@@ -689,3 +697,4 @@ class Nmcli:
                 i = j + 1
             j += 1
         yield string[i:j]
+
