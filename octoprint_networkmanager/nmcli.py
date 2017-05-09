@@ -571,14 +571,13 @@ class Nmcli:
     def _sanatize_parse(self, output):
         """
         Sanatizes the parse. using the -t command of nmli, ':' is used to split
-        Use rsplit with a max of 2 splits to make sure SSIDs with ':' are parsed correctly. 
         """
         if output:
             parse = output.splitlines()
             parse_split = []
             for line in parse:
-                line = line.rsplit(":", 2)
-                parse_split.append(line)
+                results = list(self._split_esc(line, ":"))
+                parse_split.append(results)
             return parse_split
     
     def _sanatize_parse_key_value(self, output):
@@ -671,3 +670,22 @@ class Nmcli:
         def normalize(v):
             return [int(x) for x in re.sub(r'(\.0+)*$', '', v).split(".")]
         return cmp(normalize(actual), normalize(test))
+
+    def _split_esc(self, string, delimiter):
+        """Helper method that allows to split with an escaped character (nmcli escapes the : if needed)"""
+        if len(delimiter) != 1:
+            raise ValueError('Invalid delimiter: ' + delimiter)
+        ln = len(string)
+        i = 0
+        j = 0
+        while j < ln:
+            if string[j] == '\\':
+                if j + 1 >= ln:
+                    yield string[i:j]
+                    return
+                j += 1
+            elif string[j] == delimiter:
+                yield string[i:j]
+                i = j + 1
+            j += 1
+        yield string[i:j]
