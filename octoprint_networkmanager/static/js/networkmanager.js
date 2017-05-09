@@ -341,7 +341,7 @@ $(function() {
             }
         };
 
-        self.onSettingsShown = function() {
+        self.onWirelessSettingsShown = function() {
             self.pollingEnabled = true;
             self.requestData();
         };
