@@ -322,8 +322,8 @@ class Nmcli:
         Delete all wifi configurations with ssid in name. Might be needed after multiple of the same connetions are created
         """
         for connection in self.get_configured_connections():
-            self.logger.info("Deleting connection {0}".format(connection["name"])) 
             if ssid in connection["name"]:
+                self.logger.info("Deleting connection {0}".format(connection["name"])) 
                 self.delete_configured_connection(connection["uuid"])
 
 
@@ -515,6 +515,9 @@ class Nmcli:
 
         if parse:
             for x in parse:
+                if len(x) != 4:
+                    self.logger.warning("Unparsable NMCLI output detected")
+                    continue
                 if x[0] == "loopback":
                     continue
 
