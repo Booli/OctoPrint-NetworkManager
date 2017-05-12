@@ -57,16 +57,16 @@ class NetworkManagerPlugin(octoprint.plugin.SettingsPlugin,
 
     @octoprint.plugin.BlueprintPlugin.route("/", methods=["GET"])
     def get_status(self):
+        status = None
+        wifis = []
+
         try:
             status = self._get_status()
             if status and "wifi" in status and status["wifi"]["enabled"]:
                 wifis = self._get_wifi_list()  
-            else:
-                wifis = []
         except Exception as e:
             self._logger.exception(e.message)
             return jsonify(dict(error=e.message))
-
 
         return jsonify(dict(
             wifis=wifis,
@@ -170,7 +170,7 @@ class NetworkManagerPlugin(octoprint.plugin.SettingsPlugin,
 
     def _disconnect_wifi(self):
         returncode, output = self.nmcli.disconnect_interface('wifi')
-        if (returncode != 0):
+        if returncode != 0:
             return make_response(jsonify({"message":"An error occured while disconnecting: {output}".format(output=output)}), 400)
         return make_response(jsonify({"message":"Succesful disconnect: {output}".format(output=output) }), 200)
 
@@ -221,4 +221,3 @@ def __plugin_load__():
     __plugin_hooks__ = {
         "octoprint.plugin.softwareupdate.check_config": __plugin_implementation__.get_update_information
     }
-

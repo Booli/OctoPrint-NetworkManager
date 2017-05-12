@@ -1,32 +1,29 @@
 # coding=utf-8
 import subprocess
 import logging
-import sys
-import os
 import re
 
 from time import sleep
-from pipes import quote #CHECK if used
 
-class Nmcli:
+class Nmcli(object):
 
-    def __init__(self, mocking = False):
+    def __init__(self, mocking=False):
 
         logging.basicConfig(level=logging.INFO)
         self.logger = logging.getLogger("octoprint.plugins.networkmanager.nmcli")
         self.mocking = mocking
 
-        try: 
+        try:
             self.check_nmcli_version()
         except ValueError as err:
             self.logger.error("Nmcli incorrect version: {version}. Must be higher than 0.9.9.0".format(version=err.args[0]))
             raise Exception
 
         self.ip_regex = re.compile('(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)')
- 
+
     def _send_command(self, command):
         """
-        Sends command to ncmli with subprocess. 
+        Sends command to ncmli with subprocess.
         Returns (0, output) of the command if succeeded, returns the exit code and output when errors
         """
 
@@ -38,23 +35,19 @@ class Nmcli:
         command[:0] = ["nmcli"]
         try:
             result = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-            output , error = result.communicate()
+            output, _ = result.communicate()
 
             # Error detected, return exit code and output + error
             # Output is returned because nmcli reports error states in output and not in error ><
             if result.returncode != 0:
-                self.logger.warn("Error while trying execute command {command}: output: {output}".format(command=command, output=output, error=error))
-                #raise subprocess.CalledProcessError(result.returncode, command, output)
-                #An error occured, return the return code and one string of the 
-                return result.returncode, output
+                self.logger.warn("Error while trying execute command {command}: output: {output}".format(command=command, output=output))
 
             self._log_command_output(result.returncode, output)
 
             return result.returncode, output
-        except OSError as e:
-            self.logger.warn("OSError: {error}, file: {filename}, error: {message}".format(error=e.errno, filename=e.filename, message=e.strerror))
-
-
+        except OSError as err:
+            self.logger.warn("OSError: {error}, file: {filename}, error: {message}".format(error=err.errno, filename=err.filename, message=err.strerror))
+            return 1, err.strerror
 
     def scan_wifi(self, force=False):
         """
@@ -76,11 +69,10 @@ class Nmcli:
 
         if self.mocking:
             result = []
-            for i in range(0,20):
-                result.append(dict(ssid="Leapfrog%d" % (i+1), signal=(20-i)*5, security=(i%2==0)))
+            for i in range(0, 20):
+                result.append(dict(ssid="Leapfrog%d" % (i+1), signal=(20-i)*5, security=(i%2 == 0), connection_uuid=None))
             return result
 
-        
         if returncode != 0:
             return None
 
@@ -94,9 +86,11 @@ class Nmcli:
 
         configured_connections = self.get_configured_connections()
 
-        # Convert signal to int
         for cell in cells:
+            # Ensure signal is an int
             cell["signal"] = int(cell["signal"])
+
+            # Extend cells with connection properties
             cell["connection_uuid"] = None
             if configured_connections:
                 for connection in configured_connections:
@@ -132,14 +126,15 @@ class Nmcli:
                 enabled: bool
         """
         if self.mocking:
-            return { 
-                "ethernet" : { 
-                    "connection_uuid" : "1234", 
-                    "connected" : True, 
-                    "ip" : "127.0.0.1" },
+            return {
+                "ethernet" : {
+                    "connection_uuid" : "1234",
+                    "connected" : True,
+                    "ip" : "127.0.0.1"
+                   },
                 "wifi" : {
-                    "connection_uuid" : "5678", 
-                    "connected" : True, 
+                    "connection_uuid" : "5678",
+                    "connected" : True,
                     "ssid" : "Leapfrog2",
                     "ip" : "127.0.0.2",
                     "enabled": True
@@ -149,22 +144,23 @@ class Nmcli:
         result = {}
 
         interfaces = self.get_interfaces()
+        if interfaces:
+            for key, interface in interfaces.iteritems():
+                props = {}
 
-        for interface in interfaces:
-            props = {}
+                if interface["connection_uuid"]:
+                    details = self.get_configured_connection_details(interface["connection_uuid"])
+                    props["ssid"] = details["ssid"] if "ssid" in details else None
+                    props["ip"] = details["ipv4"]["ip"]
 
-            if interfaces[interface]["connection_uuid"]:
-                details = self.get_configured_connection_details(interfaces[interface]["connection_uuid"])
-                props["ssid"] = details["ssid"] if "ssid" in details else None
-                props["ip"] = details["ipv4"]["ip"]
+                # Copy properties from interface
+                props["connection_uuid"] = interface["connection_uuid"]
+                props["connected"] = interface["connected"]
+                props["enabled"] = interface["enabled"]
+                props["mac_address"] = interface["mac_address"]
 
-            props["connection_uuid"] = interfaces[interface]["connection_uuid"]
-            props["connected"] = interfaces[interface]["connected"]
-            props["enabled"] = interfaces[interface]["enabled"]
-            props["mac_address"] = interfaces[interface]["mac_address"]
+                result[key] = props
 
-            result[interface] = props
-            
         return result
 
     def get_configured_connections(self):
@@ -172,7 +168,7 @@ class Nmcli:
         Get all configured connections for wireless and wired configurations
         """
         command = ["-t", "-f", "name, uuid, type", "c"]
-        keys =["name", "uuid", "type"]
+        keys = ["name", "uuid", "type"]
 
         returncode, output = self._send_command(command)
 
@@ -202,7 +198,7 @@ class Nmcli:
         result = self._send_command(command)
 
         if result[0]:
-            self.logger.warn("An error occurred deleting a connection") 
+            self.logger.warn("An error occurred deleting a connection")
             return False
         else:
             self.logger.info("Connection with uuid: {uuid} deleted".format(uuid=uuid))
@@ -210,18 +206,18 @@ class Nmcli:
 
 
     def get_configured_connection_details(self, uuid):
-        command = ["-t", "con", "show", uuid ]
-        
+        command = ["-t", "con", "show", uuid]
+
         if self.mocking:
             if uuid == "1234":
                 # Ethernet
                 details = {
-                "connection.type": "802-3-ethernet",
-                "802-3-ethernet.mac-address": "12:34:56:WI:RE:D0:00",
-                "ipv4.method" : "manual",
-                "ipv4.addresses" : "ip = 127.0.0.1/24",
-                "ipv4.routes" : "dst = 192.168.0.1/24",
-                "ipv4.dns" : "1.1.1.1 2.2.2.2"
+                    "connection.type": "802-3-ethernet",
+                    "802-3-ethernet.mac-address": "12:34:56:WI:RE:D0:00",
+                    "ipv4.method" : "manual",
+                    "ipv4.addresses" : "ip = 127.0.0.1/24",
+                    "ipv4.routes" : "dst = 192.168.0.1/24",
+                    "ipv4.dns" : "1.1.1.1 2.2.2.2"
                 }
             elif uuid == "5678":
                 # Wifi
@@ -362,8 +358,8 @@ class Nmcli:
             self.logger.error("Could not find interface {0}".format(interface))
 
     def _disconnect_device(self, device):
-        """ 
-        Disconnect wifi selected. This uses 'nmcli dev disconnect interface' since thats is the recommended method. 
+        """
+        Disconnect wifi selected. This uses 'nmcli dev disconnect interface' since thats is the recommended method.
         Using 'nmcli con down SSID' will bring the connection down but will not make it auto connect on the interface any more.
         """
 
@@ -371,15 +367,15 @@ class Nmcli:
             command = ["dev", "disconnect", device]
             
             return self._send_command(command)
-        return (1, "Device not active") 
+        return (1, "Device not active")
 
     def _connect_device(self, device):
 
         if not self.is_device_active(device):
             command = ["dev", "connect", device]
-            
+
             return self._send_command(command)
-        return (1, "Device not active") 
+        return (1, "Device not active")
 
     def is_wifi_configured(self):
         """
@@ -406,7 +402,7 @@ class Nmcli:
         Returns True if active, falls if not active
         """
         command = ["-t", "-f", "device, state", "device", "status"]
-        
+
         returncode, output = self._send_command(command)
 
         if returncode != 0:
@@ -423,7 +419,7 @@ class Nmcli:
                     return elem[1] == "connected"
 
         # We didnt find any device matching, return False also
-        return False 
+        return False
 
     def get_active_connections(self):
         """
@@ -456,7 +452,7 @@ class Nmcli:
         configured_connections = self.get_configured_connections()
         for connection in configured_connections:
             if ssid in connection.values():
-                # The ssid we are trying to connect to already has a configuration file. 
+                # The ssid we are trying to connect to already has a configuration file.
                 # Delete it and all it's partial configuration files before trying to set up a new connection
                 self.clear_configured_connection(ssid)
 
@@ -495,7 +491,7 @@ class Nmcli:
         Return list of interfaces
         For example {'ethernet': { 'device': 'eth0', 'connection_uuid' : '1234-ab-..' }, 'wifi': { 'device': 'wlan0', 'connection_uuid' : '1234-ab-..' }}
         """
-        command = ["-t","-f","type, device, con-uuid, state", "dev"]
+        command = ["-t", "-f", "type, device, con-uuid, state", "dev"]
 
         returncode, output = self._send_command(command)
 
@@ -505,12 +501,19 @@ class Nmcli:
         parse = self._sanatize_parse(output)
 
         if self.mocking:
-            return {'ethernet': { 'device': 'eth0', 
-                                 'connection_uuid' : '1234', 
-                                 'enabled': True }, 
-                    'wifi': { 'device': 'wlan0', 
-                             'connection_uuid' : '5678', 
-                             'enabled': True }}
+            return {
+                    'ethernet': {
+                        'device': 'eth0',
+                        'connection_uuid' : '1234',
+                        'enabled': True
+                        }, 
+                    'wifi': {
+                        'device': 'wlan0',
+                        'connection_uuid' : '5678',
+                        'enabled': True
+                        }
+                    }
+
         interfaces = {}
 
         if parse:
