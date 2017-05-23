@@ -245,7 +245,7 @@ class Nmcli(object):
             "psk": "",
             "ipv4": {
                 "method": details["ipv4.method"],
-                "ip": self._get_ipv4_address(details["ipv4.addresses"]),
+                "ip": self._get_ipv4_address(details["IP4.ADDRESS[1]"]),
                 "gateway": self._get_gateway_ipv4_address(details["ipv4.routes"]),
                 "dns": details["ipv4.dns"].split()
                 }
