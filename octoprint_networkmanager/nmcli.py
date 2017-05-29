@@ -240,14 +240,14 @@ class Nmcli(object):
         result = {
             "uuid": uuid,
             "name": self._get_connection_name(details),
-            "isWireless": "wireless" in details["connection.type"],
+            "isWireless": "wireless" in details.get("connection.type", None),
             "ssid": self._get_connection_ssid(details),
             "psk": "",
             "ipv4": {
-                "method": details["ipv4.method"],
-                "ip": self._get_ipv4_address(details["IP4.ADDRESS[1]"]),
-                "gateway": self._get_gateway_ipv4_address(details["ipv4.routes"]),
-                "dns": details["ipv4.dns"].split()
+                "method": details.get("ipv4.method", None),
+                "ip": self._get_ipv4_address(details.get("IP4.ADDRESS[1]", None)),
+                "gateway": self._get_gateway_ipv4_address(details.get("ipv4.routes")),
+                "dns": details.get("ipv4.dns","").split()
                 }
             }
 
@@ -646,6 +646,9 @@ class Nmcli(object):
             return "Wired"
 
     def _get_ipv4_address(self, ip_details):
+        if not ip_details:
+            return None
+
         look_for_start = "ip = "
         look_for_end = "/"
 
@@ -656,6 +659,9 @@ class Nmcli(object):
             return ip_details[start_idx+len(look_for_start):end_idx]
 
     def _get_gateway_ipv4_address(self, ip_details):
+        if not ip_details:
+            return None
+
         look_for_start = "dst = "
         look_for_end = "/"
 
