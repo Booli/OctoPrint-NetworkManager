@@ -133,6 +133,8 @@ $(function() {
 
             newConnection = newConnection || false;
 
+            if (!uuid) newConnection = true;
+
             self.working(true);
             var url = OctoPrint.getBlueprintUrl("networkmanager") + "connection_details/" + (uuid || targetInterface);
             OctoPrint.get(url)
@@ -173,14 +175,23 @@ $(function() {
                 self.requestData(true);
 
             }).fail(function () {
-                if (self.connectionDetails.newConnection()) {
+                if (self.connectionDetails.newConnection() && self.connectionDetails.targetInterface() == "wifi") {
                     $.notify({
                         title: "Connection failed",
                         text: "The printer was unable to connect to the wifi network \"" + self.connectionDetails.ssid() + "\". " + (self.connectionDetails.psk() ? ' Please check if you entered the correct password.' : '')
                     },
                            "error"
                        );
-                } else {
+                }
+                else if (self.connectionDetails.newConnection()) {
+                    $.notify({
+                        title: "Connection failed",
+                        text: "The printer was unable to connect to the wired network."
+                    },
+                           "error"
+                       );
+                }
+                else {
                     $.notify({
                         title: "Could not save connection settings",
                         text: "Please verify the settings you have entered and try again."
