@@ -238,7 +238,7 @@ class Nmcli(object):
                 return None
 
         result = {
-            "uuid": uuid,
+            "uuid": details.get("connection.uuid", uuid),
             "name": self._get_connection_name(details),
             "isWireless": "wireless" in details.get("connection.type", None),
             "ssid": self._get_connection_ssid(details),
@@ -595,6 +595,11 @@ class Nmcli(object):
             parse = output.splitlines()
             parse_split = {}
             for line in parse:
+                
+                # An empty line indicates a new connection entry. We only parse the first.
+                if not line:
+                    break
+
                 line = line.split(":", 1)
                 if len(line) == 2:
                     parse_split[line[0]] = line[1]
