@@ -654,14 +654,9 @@ class Nmcli(object):
         if not ip_details:
             return None
 
-        look_for_start = "ip = "
-        look_for_end = "/"
-
-        start_idx = ip_details.find(look_for_start)
-        end_idx = ip_details.find(look_for_end, start_idx+len(look_for_start))
-
-        if start_idx > -1 and end_idx > -1:
-            return ip_details[start_idx+len(look_for_start):end_idx]
+        match = self.ip_regex.search(ip_details)
+        if match:
+            return match.group()
 
     def _get_gateway_ipv4_address(self, ip_details):
         if not ip_details:
