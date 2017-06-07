@@ -134,10 +134,13 @@ $(function() {
             newConnection = newConnection || false;
 
             self.working(true);
-            var url = OctoPrint.getBlueprintUrl("networkmanager") + "connection_details/" + uuid
+            var url = OctoPrint.getBlueprintUrl("networkmanager") + "connection_details/" + (uuid || targetInterface);
             OctoPrint.get(url)
                 .done(function (response) {
-                    ko.mapping.fromJS(response.details, {}, self.connectionDetails);
+                    if (response.details)
+                        ko.mapping.fromJS(response.details, {}, self.connectionDetails);
+                    else
+                        self.setDefaultConnectionDetails();
 
                     self.connectionDetails.psk(undefined);
                     self.connectionDetails.newConnection(newConnection);
@@ -155,7 +158,7 @@ $(function() {
 
             data = ko.mapping.toJS(self.connectionDetails);
 
-            self._postCommand("connection_details/" + self.connectionDetails.uuid(), { "details": data, "interface": self.connectionDetails.targetInterface() })
+            self._postCommand("connection_details/" + (self.connectionDetails.uuid() || self.connectionDetails.targetInterface()), { "details": data, "interface": self.connectionDetails.targetInterface() })
             .done(function () {
 
                 self.connectionDetailsEditorVisible(false);

@@ -75,11 +75,24 @@ class NetworkManagerPlugin(octoprint.plugin.SettingsPlugin,
 
     @octoprint.plugin.BlueprintPlugin.route("/connection_details/<string:id>", methods=["GET"])
     def get_connection_details(self, id):
+
+        # Override id with an interface name
+        if id == "ethernet":
+            id = "eth0"
+        elif id == "wifi":
+            id = "wlan0"
+
         connection_details = self._get_connection_details(id)
         return make_response(jsonify(details=connection_details), 200)
 
     @octoprint.plugin.BlueprintPlugin.route("/connection_details/<string:id>", methods=["POST"])
     def set_connection_details(self, id):
+        # Override id with an interface name
+        if id == "ethernet":
+            id = "eth0"
+        elif id == "wifi":
+            id = "wlan0"
+
         connection_details = request.json["details"]
         interface = request.json["interface"]
         if self._set_connection_details(id, interface, connection_details):
