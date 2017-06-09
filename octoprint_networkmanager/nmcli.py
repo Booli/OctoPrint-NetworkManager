@@ -215,7 +215,7 @@ class Nmcli(object):
                     "connection.type": "802-3-ethernet",
                     "802-3-ethernet.mac-address": "12:34:56:WI:RE:D0:00",
                     "ipv4.method" : "manual",
-                    "ipv4.addresses" : "ip = 127.0.0.1/24",
+                    "ipv4.addresses" : "ip = 127.0.0.1/24, gw = 192.168.0.1",
                     "ipv4.routes" : "dst = 192.168.0.1/24",
                     "ipv4.dns" : "1.1.1.1 2.2.2.2"
                 }
@@ -226,7 +226,7 @@ class Nmcli(object):
                     "802-11-wireless.ssid": "Leapfrog2",
                     "802-11-wireless.mac-address": "12:34:56:WI:RE:LE:SS",
                     "ipv4.method" : "auto",
-                    "ipv4.addresses" : "ip = 127.0.0.2/24",
+                    "ipv4.addresses" : "ip = 127.0.0.2/24, gw = 192.168.0.1",
                     "ipv4.routes" : "dst = 192.168.0.1/24",
                     "ipv4.dns" : "8.8.8.8 4.4.4.4"
                     }
@@ -245,8 +245,8 @@ class Nmcli(object):
             "psk": "",
             "ipv4": {
                 "method": details.get("ipv4.method", None),
-                "ip": self._get_ipv4_address(details.get("IP4.ADDRESS[1]", None)),
-                "gateway": self._get_gateway_ipv4_address(details.get("ipv4.routes")),
+                "ip": self._get_ipv4_address(details.get("ipv4.addresses", None)),
+                "gateway": self._get_gateway_ipv4_address(details.get("ipv4.addresses", None)),
                 "dns": details.get("ipv4.dns","").split()
                 }
             }
@@ -295,8 +295,7 @@ class Nmcli(object):
         new_settings["ipv4.method"] = connection_details["ipv4"]["method"]
 
         if new_settings["ipv4.method"] == "manual":
-            new_settings["ipv4.addresses"] = connection_details["ipv4"]["ip"] if connection_details["ipv4"]["ip"] else ""
-            new_settings["ipv4.routes"] = connection_details["ipv4"]["gateway"] if connection_details["ipv4"]["gateway"] else ""
+            new_settings["ipv4.addresses"] = self.create_ip_addresses_str(connection_details["ipv4"]["ip"], connection_details["ipv4"]["gateway"])
             new_settings["ipv4.dns"] = " ".join(connection_details["ipv4"]["dns"]) if connection_details["ipv4"]["dns"] else ""
 
         for setting, value in new_settings.iteritems():
@@ -312,6 +311,16 @@ class Nmcli(object):
         exitcode, _ = self._send_command(command)
 
         return exitcode == 0
+
+    def create_ip_addresses_str(self, ip_address, gateway):
+        if ip_address and gateway:
+            return ip_address + " " + gateway
+        elif ip_address:
+            return ip_address
+        elif gateway:
+            return "0.0.0.0 " + gateway
+        else:
+            return ""
 
     def clear_configured_connection(self, ssid):
         """
@@ -654,7 +663,9 @@ class Nmcli(object):
         if not ip_details:
             return None
 
-        match = self.ip_regex.search(ip_details)
+        split = ip_details.split(",")
+
+        match = self.ip_regex.search(split[0])
         if match:
             return match.group()
 
@@ -662,14 +673,14 @@ class Nmcli(object):
         if not ip_details:
             return None
 
-        look_for_start = "dst = "
-        look_for_end = "/"
+        split = ip_details.split(",")
 
-        start_idx = ip_details.find(look_for_start)
-        end_idx = ip_details.find(look_for_end, start_idx+len(look_for_start))
+        if len(split) < 2:
+            return None
 
-        if start_idx > -1 and end_idx > -1:
-            return ip_details[start_idx+len(look_for_start):end_idx]
+        match = self.ip_regex.search(split[1])
+        if match:
+            return match.group()
 
     def _log_command(self, command):
         command_str = " ".join(command)
