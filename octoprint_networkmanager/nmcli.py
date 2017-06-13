@@ -151,7 +151,7 @@ class Nmcli(object):
                 if interface["connection_uuid"]:
                     details = self.get_configured_connection_details(interface["connection_uuid"])
                     props["ssid"] = details["ssid"] if "ssid" in details else None
-                    props["ip"] = details["ipv4"]["ip"]
+                    props["ip"] = details["ipv4"]["active_ip"]
 
                 # Copy properties from interface
                 props["connection_uuid"] = interface["connection_uuid"]
@@ -217,7 +217,8 @@ class Nmcli(object):
                     "ipv4.method" : "manual",
                     "ipv4.addresses" : "ip = 127.0.0.1/24, gw = 192.168.0.1",
                     "ipv4.routes" : "dst = 192.168.0.1/24",
-                    "ipv4.dns" : "1.1.1.1 2.2.2.2"
+                    "ipv4.dns" : "1.1.1.1 2.2.2.2",
+                    "IP4.ADDRESS[1]" : "ip = 127.0.0.1/24, gw = 192.168.0.1"
                 }
             elif uuid == "5678":
                 # Wifi
@@ -226,9 +227,10 @@ class Nmcli(object):
                     "802-11-wireless.ssid": "Leapfrog2",
                     "802-11-wireless.mac-address": "12:34:56:WI:RE:LE:SS",
                     "ipv4.method" : "auto",
-                    "ipv4.addresses" : "ip = 127.0.0.2/24, gw = 192.168.0.1",
+                    "ipv4.addresses" : "",
                     "ipv4.routes" : "dst = 192.168.0.1/24",
-                    "ipv4.dns" : "8.8.8.8 4.4.4.4"
+                    "ipv4.dns" : "8.8.8.8 4.4.4.4",
+                    "IP4.ADDRESS[1]" : "ip = 127.0.0.2/24, gw = 192.168.0.2"
                     }
         else:
             returncode, output = self._send_command(command)
@@ -245,7 +247,8 @@ class Nmcli(object):
             "psk": "",
             "ipv4": {
                 "method": details.get("ipv4.method", None),
-                "ip": self._get_ipv4_address(details.get("ipv4.addresses", None)),
+                "ip": self._get_ipv4_address(details.get("ipv4.addresses", None)), # Manually Configured IP address
+                "active_ip": self._get_ipv4_address(details.get("IP4.ADDRESS[1]", None)),
                 "gateway": self._get_gateway_ipv4_address(details.get("ipv4.addresses", None)),
                 "dns": details.get("ipv4.dns","").split()
                 }
