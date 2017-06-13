@@ -291,6 +291,8 @@ class Nmcli(object):
         if connection_details["isWireless"]:
             if "psk" in connection_details and connection_details["psk"]:
                 new_settings["802-11-wireless-security.psk"] = connection_details["psk"]
+        else:
+            new_settings["connection.autoconnect"] = "yes"
 
         new_settings["ipv4.method"] = connection_details["ipv4"]["method"]
 
