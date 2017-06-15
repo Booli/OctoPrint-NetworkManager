@@ -187,10 +187,10 @@ class NetworkManagerPlugin(octoprint.plugin.SettingsPlugin,
         return result
 
     def _disconnect_wifi(self):
-        returncode, output = self.nmcli.disconnect_interface('wifi')
-        if returncode != 0:
-            return make_response(jsonify({"message":"An error occured while disconnecting: {output}".format(output=output)}), 400)
-        return make_response(jsonify({"message":"Succesful disconnect: {output}".format(output=output) }), 200)
+        disconnected = self.nmcli.disconnect_interface('wifi')
+        if not disconnected:
+            return make_response(jsonify({"message":"An error occured while disconnecting." }), 400)
+        return make_response(jsonify({"message":"Succesful disconnect" }), 200)
 
 
     def _delete_configured_connection(self, uuid):
@@ -198,6 +198,10 @@ class NetworkManagerPlugin(octoprint.plugin.SettingsPlugin,
 
     def _set_wifi_enabled(self, enabled):
         self.nmcli.set_wifi_radio(enabled)
+
+        if enabled:
+            # Autoconnect
+            self.nmcli.connect_interface("wifi")
 
     def _reset_wifi(self):
         self.nmcli.reset_wifi()

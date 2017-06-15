@@ -42,7 +42,8 @@ class Nmcli(object):
             if result.returncode != 0:
                 self.logger.warn("Error while trying execute command {command}: output: {output}".format(command=command, output=output))
 
-            self._log_command_output(result.returncode, output)
+            if not "show" in command and not "list" in command:
+                self._log_command_output(result.returncode, output)
 
             return result.returncode, output
         except OSError as err:
@@ -167,8 +168,8 @@ class Nmcli(object):
         """
         Get all configured connections for wireless and wired configurations
         """
-        command = ["-t", "-f", "name, uuid, type", "c"]
-        keys = ["name", "uuid", "type"]
+        command = ["-t", "-f", "name, uuid, type, autoconnect", "c"]
+        keys = ["name", "uuid", "type", "autoconnect"]
 
         returncode, output = self._send_command(command)
 
@@ -186,6 +187,9 @@ class Nmcli(object):
                     connection["type"] = "Wireless"
                 if "ethernet" in connection["type"]:
                     connection["type"] = "Wired"
+                
+                # string to boolean
+                connection["autoconnect"] = connection["autoconnect"] == "yes"
 
         return configured_connections
 
@@ -313,6 +317,10 @@ class Nmcli(object):
         exitcode, _ = self._send_command(command)
 
         # Apply changes
+        if connection_details["isWireless"]:
+            # Disconnect current connection, so it won't autoconnect (we give the new connection priority)
+            self.disconnect_interface("wifi")
+
         command = [ "con", "up", uuid ]
         exitcode, _ = self._send_command(command)
 
@@ -349,40 +357,45 @@ class Nmcli(object):
 
     def disconnect_interface(self, interface):
         """
-        Disconnect either 'wifi' or 'ethernet'. Uses disconnect_device and is_device_active to disconnect an interface.
+        Disconnect either 'wifi' or 'ethernet'.
         """
         interfaces = self.get_interfaces()
 
-        if interface in interfaces:
-            device = interfaces[interface]["device"]
-            return self._disconnect_device(device)
+        if interfaces and interface in interfaces:
+            connection = interfaces[interface]["connection_uuid"]
+
+            if connection:
+                command = ["con", "down", connection] # This will set autoconnect to false
+                returncode, _ = self._send_command(command)
+                return returncode == 0
+            else:
+                # Apparantly we're disconnected already
+                return True
         else:
             self.logger.error("Could not find interface {0}".format(interface))
 
 
     def connect_interface(self, interface):
         """
-        Connect either 'wifi' or 'ethernet'. Uses connect_device and is_device_active to connect an interface.
+        Connect either 'wifi' or 'ethernet'. Needs one connection of the interface to have autoconnect set.
         """
-        interfaces = self.get_interfaces()
 
-        if interface in interfaces:
-            device = interfaces[interface]["device"]
-            return self._connect_device(device)
+        connections = self.get_configured_connections()
+
+        if interface == "wifi":
+            wanted_type = "Wireless"
         else:
-            self.logger.error("Could not find interface {0}".format(interface))
+            wanted_type = "Wired"
 
-    def _disconnect_device(self, device):
-        """
-        Disconnect wifi selected. This uses 'nmcli dev disconnect interface' since thats is the recommended method.
-        Using 'nmcli con down SSID' will bring the connection down but will not make it auto connect on the interface any more.
-        """
+        if connections:
+            for connection in connections:
+                if connections["type"] == wanted_type and connections["autoconnect"]:
+                    command = ["con", "up", connection["connection_uuid"]]
+                    returncode, _ = self._send_command(command)
 
-        if self.is_device_active(device):
-            command = ["dev", "disconnect", device]
-            
-            return self._send_command(command)
-        return (1, "Device not active")
+                    # Only break on success. Otherwise try other connections.
+                    if returncode == 0:
+                        return True
 
     def _connect_device(self, device):
 

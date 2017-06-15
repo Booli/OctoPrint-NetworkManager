@@ -102,7 +102,7 @@ $(function() {
                     if (a["ssid"].toLocaleLowerCase() > b["ssid"].toLocaleLowerCase()) return 1;
                     return 0;
                 },
-                "quality": function (a, b) {
+                "signal": function (a, b) {
                     // sorts descending
                     if (a["signal"] > b["signal"]) return -1;
                     if (a["signal"] < b["signal"]) return 1;
