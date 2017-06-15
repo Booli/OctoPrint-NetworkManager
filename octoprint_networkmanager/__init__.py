@@ -131,7 +131,12 @@ class NetworkManagerPlugin(octoprint.plugin.SettingsPlugin,
             self._logger.info("Configuring wifi {ssid}...".format(**data))
             data['psk'] = None
 
-        return self.nmcli.add_wifi_connection(ssid=data["ssid"], psk=data["psk"])
+        result = self.nmcli.add_wifi_connection(ssid=data["ssid"], psk=data["psk"])
+
+        if result:
+            return make_response(jsonify(connection_uuid=result), 200)
+        else:
+            return make_response(jsonify(), 400)
 
     @octoprint.plugin.BlueprintPlugin.route("/wifi/disconnect", methods=["POST"])
     def disconnect_wifi(self):
