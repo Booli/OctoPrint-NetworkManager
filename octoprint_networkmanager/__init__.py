@@ -124,7 +124,7 @@ class NetworkManagerPlugin(octoprint.plugin.SettingsPlugin,
     @octoprint.plugin.BlueprintPlugin.route("/wifi/configure", methods=["POST"])
     def configure_wifi(self):
         if not admin_permission.can():
-            return make_response(jsonify({ "message": "Insufficient rights"}, 403))
+            return make_response(jsonify({ "message": "Insufficient rights"}), 403)
 
         data = request.json
         if "psk" in data:
@@ -143,14 +143,14 @@ class NetworkManagerPlugin(octoprint.plugin.SettingsPlugin,
     @octoprint.plugin.BlueprintPlugin.route("/wifi/disconnect", methods=["POST"])
     def disconnect_wifi(self):
         if not admin_permission.can():
-            return make_response(jsonify({ "message": "Insufficient rights"}, 403))
+            return make_response(jsonify({ "message": "Insufficient rights"}), 403)
 
         return self._disconnect_wifi()
 
     @octoprint.plugin.BlueprintPlugin.route("/wifi/reset", methods=["POST"])
     def reset_wifi(self):
         if not admin_permission.can():
-            return make_response(jsonify({ "message": "Insufficient rights"}, 403))
+            return make_response(jsonify({ "message": "Insufficient rights"}), 403)
         self._reset_wifi()
         return make_response(jsonify(), 200)
 
@@ -201,9 +201,10 @@ class NetworkManagerPlugin(octoprint.plugin.SettingsPlugin,
     def _set_wifi_enabled(self, enabled):
         result = self.nmcli.set_wifi_radio(enabled)
 
-        if enabled and result:
-            # Autoconnect
-            self.nmcli.connect_interface("wifi")
+        # No need to autoconnect
+        #if enabled and result:
+        #    # Autoconnect
+        #    self.nmcli.connect_interface("wifi")
 
         return result
 

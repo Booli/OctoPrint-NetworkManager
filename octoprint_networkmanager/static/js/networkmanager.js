@@ -352,6 +352,7 @@ $(function() {
                         },
                                "error"
                         );
+                        self.working(false);
                     });
                 }
                 else {
@@ -469,8 +470,9 @@ $(function() {
             }
 
             if (self.pollingEnabled) {
-                self.pollingTimeoutId = setTimeout(function() {
-                    self.requestData();
+                self.pollingTimeoutId = setTimeout(function () {
+                    if(!self.working())
+                        self.requestData();
                 }, 30000);
             }
         };

@@ -393,7 +393,7 @@ class Nmcli(object):
 
         if connections:
             for connection in connections:
-                if connections["type"] == wanted_type and connections["autoconnect"]:
+                if connection["type"] == wanted_type and connection["autoconnect"]:
                     command = ["con", "up", connection["connection_uuid"]]
                     returncode, _ = self._send_command(command)
 
