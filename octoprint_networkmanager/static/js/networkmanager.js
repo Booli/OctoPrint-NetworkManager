@@ -24,6 +24,7 @@ $(function() {
             newConnection: ko.observable(false),
             uuid: ko.observable(),
             name: ko.observable(),
+            autoconnect: ko.observable(true),
             ssid: ko.observable(),
             psk: ko.observable(),
             isWireless: ko.observable(),
@@ -143,8 +144,10 @@ $(function() {
                         ko.mapping.fromJS(response.details, {}, self.connectionDetails);
                     else
                         self.setDefaultConnectionDetails();
+                    
+                    if (newConnection)
+                        self.connectionDetails.autoconnect(true);
 
-                    self.connectionDetails.psk(undefined);
                     self.connectionDetails.newConnection(newConnection);
                     self.connectionDetails.targetInterface(targetInterface);
 

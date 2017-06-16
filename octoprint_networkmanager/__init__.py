@@ -201,10 +201,9 @@ class NetworkManagerPlugin(octoprint.plugin.SettingsPlugin,
     def _set_wifi_enabled(self, enabled):
         result = self.nmcli.set_wifi_radio(enabled)
 
-        # No need to autoconnect
-        #if enabled and result:
-        #    # Autoconnect
-        #    self.nmcli.connect_interface("wifi")
+        if enabled and result:
+            # Autoconnect
+            self.nmcli.connect_interface("wifi")
 
         return result
 

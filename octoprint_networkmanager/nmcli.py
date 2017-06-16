@@ -2,9 +2,14 @@
 import subprocess
 import logging
 import re
+import os
 from random import randint
 
 from time import sleep
+
+class CommandTarget(object):
+    NMCLI = "nmcli"
+    DBUS = "dbus-send"
 
 class Nmcli(object):
 
@@ -21,8 +26,9 @@ class Nmcli(object):
             raise Exception
 
         self.ip_regex = re.compile('(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)')
+        self.string_regex = re.compile("string \"(.*)\"")
 
-    def _send_command(self, command):
+    def _send_command(self, command, target = CommandTarget.NMCLI):
         """
         Sends command to ncmli with subprocess.
         Returns (0, output) of the command if succeeded, returns the exit code and output when errors
@@ -33,7 +39,7 @@ class Nmcli(object):
         if self.mocking:
             return 1, None
 
-        command[:0] = ["nmcli"]
+        command[:0] = [target]
         try:
             result = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
             output, _ = result.communicate()
@@ -169,8 +175,8 @@ class Nmcli(object):
         """
         Get all configured connections for wireless and wired configurations
         """
-        command = ["-t", "-f", "name, uuid, type, autoconnect", "c"]
-        keys = ["name", "uuid", "type", "autoconnect"]
+        command = ["-t", "-f", "name, uuid, type, autoconnect, dbus-path", "con", "show" ]
+        keys = ["name", "uuid", "type", "autoconnect", "dbus_path" ]
 
         returncode, output = self._send_command(command)
 
@@ -219,24 +225,24 @@ class Nmcli(object):
                 # Ethernet
                 details = {
                     "connection.type": "802-3-ethernet",
+                    "connection.autoconnect": "yes",
                     "802-3-ethernet.mac-address": "12:34:56:WI:RE:D0:00",
                     "ipv4.method" : "manual",
                     "ipv4.addresses" : "ip = 127.0.0.1/24, gw = 192.168.0.1",
                     "ipv4.routes" : "dst = 192.168.0.1/24",
-                    "ipv4.dns" : "1.1.1.1 2.2.2.2",
-                    "IP4.ADDRESS[1]" : "ip = 127.0.0.1/24, gw = 192.168.0.1"
+                    "ipv4.dns" : "1.1.1.1 2.2.2.2"
                 }
             elif uuid == "5678":
                 # Wifi
                 details = {
                     "connection.type": "802-11-wireless",
+                    "connection.autoconnect": "no",
                     "802-11-wireless.ssid": "Leapfrog2",
                     "802-11-wireless.mac-address": "12:34:56:WI:RE:LE:SS",
                     "ipv4.method" : "auto",
                     "ipv4.addresses" : "",
                     "ipv4.routes" : "dst = 192.168.0.1/24",
                     "ipv4.dns" : "8.8.8.8 4.4.4.4",
-                    "IP4.ADDRESS[1]" : "ip = 127.0.0.2/24, gw = 192.168.0.2"
                     }
         else:
             returncode, output = self._send_command(command)
@@ -244,13 +250,16 @@ class Nmcli(object):
                 details = self._sanatize_parse_key_value(output)
             else:
                 return None
+            
+        isWireless = "wireless" in details.get("connection.type", None)
 
         result = {
             "uuid": details.get("connection.uuid", uuid),
             "name": self._get_connection_name(details),
-            "isWireless": "wireless" in details.get("connection.type", None),
+            "autoconnect": details.get("connection.autoconnect", True),
+            "isWireless": isWireless,
             "ssid": self._get_connection_ssid(details),
-            "psk": "",
+            "psk": self._get_psk(uuid) if isWireless else "",
             "ipv4": {
                 "method": details.get("ipv4.method", None),
                 "ip": self._get_ipv4_address(details.get("ipv4.addresses", None)), # Manually Configured IP address
@@ -300,7 +309,10 @@ class Nmcli(object):
         if connection_details["isWireless"]:
             if "psk" in connection_details and connection_details["psk"]:
                 new_settings["802-11-wireless-security.psk"] = connection_details["psk"]
+
+            new_settings["connection.autoconnect"] = "yes" if connection_details["autoconnect"] else "no"
         else:
+            # Prevent confusion by always letting ethernet autoconnect
             new_settings["connection.autoconnect"] = "yes"
 
         new_settings["ipv4.method"] = connection_details["ipv4"]["method"]
@@ -322,8 +334,9 @@ class Nmcli(object):
             # Disconnect current connection, so it won't autoconnect (we give the new connection priority)
             self.disconnect_interface("wifi")
 
-        command = [ "con", "up", uuid ]
-        exitcode, _ = self._send_command(command)
+        if connection_details["autoconnect"]:
+            command = [ "con", "up", uuid ]
+            exitcode, _ = self._send_command(command)
 
         return exitcode == 0
 
@@ -366,10 +379,10 @@ class Nmcli(object):
         interfaces = self.get_interfaces()
 
         if interfaces and interface in interfaces:
-            connection = interfaces[interface]["connection_uuid"]
+            device = interfaces[interface]["device"]
 
             if connection:
-                command = ["con", "down", connection] # This will set autoconnect to false
+                command = ["dev", "disconnect", device] # This will set autoconnect to false
                 returncode, _ = self._send_command(command)
                 return returncode == 0
             else:
@@ -394,7 +407,7 @@ class Nmcli(object):
         if connections:
             for connection in connections:
                 if connection["type"] == wanted_type and connection["autoconnect"]:
-                    command = ["con", "up", connection["connection_uuid"]]
+                    command = ["con", "up", connection["uuid"]]
                     returncode, _ = self._send_command(command)
 
                     # Only break on success. Otherwise try other connections.
@@ -706,6 +719,50 @@ class Nmcli(object):
         match = self.ip_regex.search(split[1])
         if match:
             return match.group()
+
+    def _get_psk(self, connection_uuid):
+        if self.mocking:
+            return "abcdefgh"
+
+        if not connection_uuid:
+            return ""
+
+        # First find the dbus path
+        connections = self.get_configured_connections()
+        dbus_path = None
+        if connections:
+            for connection in connections:
+                if connection["uuid"] == connection_uuid:
+                    dbus_path = connection["dbus_path"]
+                    break
+
+        if not dbus_path:
+            self.logger.warn("Could not find dbus-path of connection {0}".format(connection_uuid))
+
+        # Use dbus to find the PSK (this way, we don't need to read any files with root permissions)
+
+        command = ["--system", "--type=method_call", "--print-reply", "--dest=org.freedesktop.NetworkManager", 
+                   dbus_path, 
+                   "org.freedesktop.NetworkManager.Settings.Connection.GetSecrets", "string:802-11-wireless-security" 
+                   ]
+
+        returncode, output = self._send_command(command, target = CommandTarget.DBUS)
+
+        if returncode == 0:
+            last = None
+            psk = None
+
+            # Iterate over all strings in the result, and return the string after "psk"
+            for match in self.string_regex.finditer(output):
+                self.logger.debug(last)
+                if last == "psk":
+                    return match.group(1) # group(1) to get only the string contents
+                else:
+                    last = match.group(1)
+                
+        
+        self.logger.warn("Could not retrieve PSK for connection at dbus path {0}".format(dbus_path))
+        return ""
 
     def _log_command(self, command):
         command_str = " ".join(command)
