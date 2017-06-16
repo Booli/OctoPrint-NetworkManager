@@ -330,10 +330,6 @@ class Nmcli(object):
         exitcode, _ = self._send_command(command)
 
         # Apply changes
-        if connection_details["isWireless"]:
-            # Disconnect current connection, so it won't autoconnect (we give the new connection priority)
-            self.disconnect_interface("wifi")
-
         if connection_details["autoconnect"]:
             command = [ "con", "up", uuid ]
             exitcode, _ = self._send_command(command)
@@ -381,7 +377,7 @@ class Nmcli(object):
         if interfaces and interface in interfaces:
             device = interfaces[interface]["device"]
 
-            if connection:
+            if device:
                 command = ["dev", "disconnect", device] # This will set autoconnect to false
                 returncode, _ = self._send_command(command)
                 return returncode == 0

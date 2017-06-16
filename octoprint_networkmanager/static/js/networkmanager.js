@@ -220,7 +220,7 @@ $(function() {
             if (data.connectionUuid) {
                 // We have seen this connection previously
                 // Give user opportunity to edit some settings
-                self.editConnectionDetails("wifi", data.connectionUuid, true);
+                self.editConnectionDetails("wifi", data.connectionUuid, false);
             }
             else if(!data.security)
             {
