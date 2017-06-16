@@ -293,7 +293,7 @@ $(function() {
         self.sendWifiRefresh = function() {
             self.working(true);
 
-            self._postCommand("wifi/scan")
+            return self._postCommand("wifi/scan")
                 .done(function (response) {
                     self.fromResponse(response);
                 })
@@ -337,14 +337,26 @@ $(function() {
                 // If this isn't an automated status update, but a user's action: notify the back-end
                 if (wifiEnabled) {
                     self.working(true);
-                    self._postCommand('wifi/enable');
-                    // Wait with the refresh
-                    window.setTimeout(self.sendWifiRefresh, 3000);
+                    self._postCommand('wifi/enable').done(function () {
+                        // Wait with the refresh
+                        window.setTimeout(function () { 
+                            self.sendWifiRefresh().done(function () {
+                                self.requestData(true);
+                            });
+                        }, 1500);
+                    }).fail(function()
+                    {
+                        $.notify({
+                            title: "Could not enable the wifi radio",
+                            text: "The printer could not enable the wifi radio. Please reboot your printer and try again."
+                        },
+                               "error"
+                        );
+                    });
                 }
                 else {
                     self.working(true);
-                    self._postCommand('wifi/disable');
-                    self.requestData(true); // Reset the ip address etc
+                    self._postCommand('wifi/disable').done(function() { self.requestData(true); }) // Reset the ip address etc
                 }
             }
         }

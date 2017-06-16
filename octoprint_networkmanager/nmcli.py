@@ -2,6 +2,7 @@
 import subprocess
 import logging
 import re
+from random import randint
 
 from time import sleep
 
@@ -71,7 +72,7 @@ class Nmcli(object):
         if self.mocking:
             result = []
             for i in range(0, 20):
-                result.append(dict(ssid="Leapfrog%d" % (i+1), signal=(20-i)*5, security=(i%2 == 0), connection_uuid=None))
+                result.append(dict(ssid="Leapfrog%d" % (i+1), signal=randint(0,100), security=(i%2 == 0), connection_uuid=None))
             return result
 
         if returncode != 0:
@@ -352,6 +353,9 @@ class Nmcli(object):
         """
         command = ["radio", "wifi", "on" if enabled else "off"]
         returncode, output = self._send_command(command)
+
+        if returncode != 0:
+            self.logger.error("Could not enable wifi radio: {0}".format(output))
 
         return returncode == 0
 

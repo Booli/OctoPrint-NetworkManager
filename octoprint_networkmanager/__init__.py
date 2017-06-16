@@ -103,9 +103,11 @@ class NetworkManagerPlugin(octoprint.plugin.SettingsPlugin,
 
     @octoprint.plugin.BlueprintPlugin.route("/wifi/enable", methods=["POST"])
     def enable_wifi(self):
-        self._set_wifi_enabled(True)
-        self._logger.info("Wifi radio enabled")
-        return jsonify()
+        if self._set_wifi_enabled(True):
+            self._logger.info("Wifi radio enabled")
+            return jsonify()
+        else:
+            return make_response(jsonify(), 400)
 
     @octoprint.plugin.BlueprintPlugin.route("/wifi/disable", methods=["POST"])
     def disable_wifi(self):
@@ -197,11 +199,13 @@ class NetworkManagerPlugin(octoprint.plugin.SettingsPlugin,
         return self.nmcli.delete_configured_connection(uuid)
 
     def _set_wifi_enabled(self, enabled):
-        self.nmcli.set_wifi_radio(enabled)
+        result = self.nmcli.set_wifi_radio(enabled)
 
-        if enabled:
+        if enabled and result:
             # Autoconnect
             self.nmcli.connect_interface("wifi")
+
+        return result
 
     def _reset_wifi(self):
         self.nmcli.reset_wifi()
