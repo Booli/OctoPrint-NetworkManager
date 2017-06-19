@@ -13,11 +13,10 @@ class CommandTarget(object):
 
 class Nmcli(object):
 
-    def __init__(self, mocking=False):
+    def __init__(self):
 
         logging.basicConfig(level=logging.INFO)
         self.logger = logging.getLogger("octoprint.plugins.networkmanager.nmcli")
-        self.mocking = mocking
 
         try:
             self.check_nmcli_version()
@@ -35,9 +34,6 @@ class Nmcli(object):
         """
 
         self._log_command(command)
-
-        if self.mocking:
-            return 1, None
 
         command[:0] = [target]
         try:
@@ -74,12 +70,6 @@ class Nmcli(object):
 
         # Parse command
         returncode, output = self._send_command(command)
-
-        if self.mocking:
-            result = []
-            for i in range(0, 20):
-                result.append(dict(ssid="Leapfrog%d" % (i+1), signal=randint(0,100), security=(i%2 == 0), connection_uuid=None))
-            return result
 
         if returncode != 0:
             return None
@@ -133,21 +123,6 @@ class Nmcli(object):
                 ssid: string
                 enabled: bool
         """
-        if self.mocking:
-            return {
-                "ethernet" : {
-                    "connection_uuid" : "1234",
-                    "connected" : True,
-                    "ip" : "127.0.0.1"
-                   },
-                "wifi" : {
-                    "connection_uuid" : "5678",
-                    "connected" : True,
-                    "ssid" : "Leapfrog2",
-                    "ip" : "127.0.0.2",
-                    "enabled": True
-                    } 
-                }
 
         result = {}
 
@@ -158,8 +133,10 @@ class Nmcli(object):
 
                 if interface["connection_uuid"]:
                     details = self.get_configured_connection_details(interface["connection_uuid"])
-                    props["ssid"] = details["ssid"] if "ssid" in details else None
-                    props["ip"] = details["ipv4"]["active_ip"]
+
+                    if details:
+                        props["ssid"] = details["ssid"] if "ssid" in details else None
+                        props["ip"] = details["ipv4"]["active_ip"]
 
                 # Copy properties from interface
                 props["connection_uuid"] = interface["connection_uuid"]
@@ -186,17 +163,17 @@ class Nmcli(object):
         parse = self._sanatize_parse(output)
 
         configured_connections = self._map_parse(parse, keys)
-
+        
         # Sanatize the connection name a bit
         if configured_connections:
             for connection in configured_connections:
-                if "wireless" in connection["type"]:
+                if "wireless" in connection.get("type", ""):
                     connection["type"] = "Wireless"
-                if "ethernet" in connection["type"]:
+                if "ethernet" in connection.get("type", ""):
                     connection["type"] = "Wired"
                 
                 # string to boolean
-                connection["autoconnect"] = connection["autoconnect"] == "yes"
+                connection["autoconnect"] = connection.get("autoconnect", "yes") == "yes"
 
         return configured_connections
 
@@ -220,56 +197,32 @@ class Nmcli(object):
     def get_configured_connection_details(self, uuid):
         command = ["-t", "con", "show", uuid]
 
-        if self.mocking:
-            if uuid == "1234":
-                # Ethernet
-                details = {
-                    "connection.type": "802-3-ethernet",
-                    "connection.autoconnect": "yes",
-                    "802-3-ethernet.mac-address": "12:34:56:WI:RE:D0:00",
-                    "ipv4.method" : "manual",
-                    "ipv4.addresses" : "ip = 127.0.0.1/24, gw = 192.168.0.1",
-                    "ipv4.routes" : "dst = 192.168.0.1/24",
-                    "ipv4.dns" : "1.1.1.1 2.2.2.2"
-                }
-            elif uuid == "5678":
-                # Wifi
-                details = {
-                    "connection.type": "802-11-wireless",
-                    "connection.autoconnect": "no",
-                    "802-11-wireless.ssid": "Leapfrog2",
-                    "802-11-wireless.mac-address": "12:34:56:WI:RE:LE:SS",
-                    "ipv4.method" : "auto",
-                    "ipv4.addresses" : "",
-                    "ipv4.routes" : "dst = 192.168.0.1/24",
-                    "ipv4.dns" : "8.8.8.8 4.4.4.4",
-                    }
-        else:
-            returncode, output = self._send_command(command)
-            if returncode == 0:
-                details = self._sanatize_parse_key_value(output)
-            else:
-                return None
+        returncode, output = self._send_command(command)
+
+        if returncode == 0:
+            details = self._sanatize_parse_key_value(output)
             
-        isWireless = "wireless" in details.get("connection.type", None)
+            if details:
 
-        result = {
-            "uuid": details.get("connection.uuid", uuid),
-            "name": self._get_connection_name(details),
-            "autoconnect": details.get("connection.autoconnect", True),
-            "isWireless": isWireless,
-            "ssid": self._get_connection_ssid(details),
-            "psk": self._get_psk(uuid) if isWireless else "",
-            "ipv4": {
-                "method": details.get("ipv4.method", None),
-                "ip": self._get_ipv4_address(details.get("ipv4.addresses", None)), # Manually Configured IP address
-                "active_ip": self._get_ipv4_address(details.get("IP4.ADDRESS[1]", None)),
-                "gateway": self._get_gateway_ipv4_address(details.get("ipv4.addresses", None)),
-                "dns": details.get("ipv4.dns","").split()
-                }
-            }
+                isWireless = "wireless" in details.get("connection.type", "")
 
-        return result
+                result = {
+                    "uuid": details.get("connection.uuid", uuid),
+                    "name": self._get_connection_name(details),
+                    "autoconnect": details.get("connection.autoconnect", "yes") == "yes",
+                    "isWireless": isWireless,
+                    "ssid": self._get_connection_ssid(details),
+                    "psk": self._get_psk(uuid) if isWireless else "",
+                    "ipv4": {
+                        "method": details.get("ipv4.method", None),
+                        "ip": self._get_ipv4_address(details.get("ipv4.addresses", "")), # Manually Configured IP address
+                        "active_ip": self._get_ipv4_address(details.get("IP4.ADDRESS[1]", "")),
+                        "gateway": self._get_gateway_ipv4_address(details.get("ipv4.addresses", "")),
+                        "dns": details.get("ipv4.dns","").replace(",","").split()
+                        }
+                    }
+
+                return result
 
     def set_configured_connection_details(self, interface, connection_details, uuid = None):
                 
@@ -451,9 +404,6 @@ class Nmcli(object):
 
         devices = self._sanatize_parse(output)
 
-        if self.mocking:
-            return True
-
         if devices:
             for elem in devices:
                 if elem[0] == device:
@@ -542,20 +492,6 @@ class Nmcli(object):
             return None
 
         parse = self._sanatize_parse(output)
-
-        if self.mocking:
-            return {
-                    'ethernet': {
-                        'device': 'eth0',
-                        'connection_uuid' : '1234',
-                        'enabled': True
-                        }, 
-                    'wifi': {
-                        'device': 'wlan0',
-                        'connection_uuid' : '5678',
-                        'enabled': True
-                        }
-                    }
 
         interfaces = {}
 
@@ -688,10 +624,8 @@ class Nmcli(object):
             return None
 
     def _get_connection_name(self, connection_details):
-        if "802-11-wireless.ssid" in connection_details:
-            return connection_details["802-11-wireless.ssid"]
-        else:
-            return "Wired"
+        name = connection_details.get("802-11-wireless.ssid", "")
+        return name if name else "Wired"
 
     def _get_ipv4_address(self, ip_details):
         if not ip_details:
@@ -717,9 +651,6 @@ class Nmcli(object):
             return match.group()
 
     def _get_psk(self, connection_uuid):
-        if self.mocking:
-            return "abcdefgh"
-
         if not connection_uuid:
             return ""
 
@@ -750,7 +681,7 @@ class Nmcli(object):
 
             # Iterate over all strings in the result, and return the string after "psk"
             for match in self.string_regex.finditer(output):
-                self.logger.debug(last)
+
                 if last == "psk":
                     return match.group(1) # group(1) to get only the string contents
                 else:

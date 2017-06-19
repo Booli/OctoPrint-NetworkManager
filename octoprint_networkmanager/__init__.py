@@ -25,7 +25,11 @@ class NetworkManagerPlugin(octoprint.plugin.SettingsPlugin,
         self.mocking = sys.platform == "win32" or sys.platform == "darwin"
 
     def initialize(self):
-        self.nmcli = Nmcli(self.mocking)
+        if self.mocking:
+            import octoprint_networkmanager.mockingnmcli
+            self.nmcli = octoprint_networkmanager.mockingnmcli.MockingNmcli()
+        else:
+            self.nmcli = Nmcli()
 
     ##~~ SettingsPlugin mixin
 
