@@ -27,6 +27,8 @@ class Nmcli(object):
         self.ip_regex = re.compile('(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)')
         self.string_regex = re.compile("string \"(.*)\"")
 
+        self.mac_addresses = { "wlan0": None, "eth0": None }
+
     def _send_command(self, command, target = CommandTarget.NMCLI):
         """
         Sends command to ncmli with subprocess.
@@ -132,7 +134,7 @@ class Nmcli(object):
                 props = {}
 
                 if interface["connection_uuid"]:
-                    details = self.get_configured_connection_details(interface["connection_uuid"])
+                    details = self.get_configured_connection_details(interface["connection_uuid"], read_psk = False)
 
                     if details:
                         props["ssid"] = details["ssid"] if "ssid" in details else None
@@ -194,7 +196,7 @@ class Nmcli(object):
             return True
 
 
-    def get_configured_connection_details(self, uuid):
+    def get_configured_connection_details(self, uuid, read_psk = True):
         command = ["-t", "con", "show", uuid]
 
         returncode, output = self._send_command(command)
@@ -206,13 +208,18 @@ class Nmcli(object):
 
                 isWireless = "wireless" in details.get("connection.type", "")
 
+                psk = ""
+
+                if read_psk and isWireless:
+                    psk = self._get_psk(uuid)
+
                 result = {
                     "uuid": details.get("connection.uuid", uuid),
                     "name": self._get_connection_name(details),
                     "autoconnect": details.get("connection.autoconnect", "yes") == "yes",
                     "isWireless": isWireless,
                     "ssid": self._get_connection_ssid(details),
-                    "psk": self._get_psk(uuid) if isWireless else "",
+                    "psk": psk,
                     "ipv4": {
                         "method": details.get("ipv4.method", None),
                         "ip": self._get_ipv4_address(details.get("ipv4.addresses", "")), # Manually Configured IP address
@@ -503,25 +510,36 @@ class Nmcli(object):
                 if x[0] == "loopback":
                     continue
 
-                # Retrieve mac address
-                command = ['-t', '-f', 'GENERAL.HWADDR', 'd', 'show', x[1]]
-                returncode, output = self._send_command(command)
-
-                if returncode == 0 and ':' in output:
-                    mac_address = output.split(':', 1)[1].strip()
-                else:
-                    mac_address = None
-
                 # Combine data into nice dicts
                 interfaces[x[0]] = { 
                     "device": x[1], 
                     "connection_uuid": x[2] if x[2] != "--" else None,
                     "enabled": x[3] != "unavailable" and x[3] != "unmanaged",
                     "connected": x[3] == "connected",
-                    "mac_address":  mac_address
+                    "mac_address":  self._get_mac_address(x[1])
                     }
 
         return interfaces
+
+    def _get_mac_address(self, device):
+        """
+        Returns the macaddress for a given device. Stores the result in memory to prevent multiple
+        nmcli calls.
+        """
+
+        if not self.mac_addresses.get(device, None):
+
+            command = ['-t', '-f', 'GENERAL.HWADDR', 'dev', 'show', device]
+            returncode, output = self._send_command(command)
+
+            if returncode == 0 and ':' in output:
+                mac_address = output.split(':', 1)[1].strip()
+            else:
+                mac_address = None
+
+            self.mac_addresses[device] = mac_address
+
+        return self.mac_addresses[device]
 
     def _get_interface_ip(self, device):
         """

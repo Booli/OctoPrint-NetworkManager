@@ -111,7 +111,7 @@ class MockingNmcli(Nmcli):
                 return self._dev_disconnect(command)
             elif is_equal_command(command, ["-t", "-f", "type, device, con-uuid, state", "dev"]):
                 return self._dev_state()
-            elif is_equal_command(command, ['-t', '-f', 'GENERAL.HWADDR', 'd', 'show']):
+            elif is_equal_command(command, ['-t', '-f', 'GENERAL.HWADDR', 'dev', 'show']):
                 return self._dev_hwaddr(command)
             elif is_equal_command(command, ["-t", "-f", "IP4.ADDRESS", "d", "show"]):
                 return MockingNmcli.DEV_SHOW_IP
