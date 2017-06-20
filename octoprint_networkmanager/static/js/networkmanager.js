@@ -376,11 +376,12 @@ $(function() {
             self.requestData();
         };
 
-        self.onSettingsHidden = function() {
+        self.onWirelessSettingsHidden = function() {
             if (self.pollingTimeoutId !== undefined) {
                 self.pollingTimeoutId = undefined;
             }
             self.pollingEnabled = false;
+            self.cancelConnectionDetails();
         };
 
         self.getEntryId = function(data) {
